@@ -11,7 +11,7 @@
 ## Module Structure
 
 ```
-reto-prosperas2/
+harrison-prosperas-challenge/
 ├── docker-compose.yml           # Orchestrates all services (app + worker + localstack)
 ├── .gitignore                    # Git ignore (excludes .env files)
 ├── AGENTS.md                    # This file

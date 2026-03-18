@@ -1,7 +1,7 @@
 # Reto Prosperas Backend Module - Hexagonal Architecture
 
 **Module:** FastAPI REST API  
-**Directory:** `/home/harri/development/projects/reto-prosperas2/backend`  
+**Directory:** `/home/harri/development/projects/harrison-prosperas-challenge/backend`  
 **Architecture:** Hexagonal (Ports & Adapters)  
 **Status:** ✅ IMPLEMENTED
 

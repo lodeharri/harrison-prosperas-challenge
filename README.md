@@ -58,7 +58,7 @@ Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB (
 ### 1. Navegar al directorio del proyecto
 
 ```bash
-cd /home/harri/development/projects/reto-prosperas2
+cd /home/harri/development/projects/harrison-prosperas-challenge
 ```
 
 ### 2. Copiar variables de entorno
@@ -83,7 +83,7 @@ curl http://localhost:4566/_localstack/health
 ### 5. Inicializar recursos AWS (primera vez)
 
 ```bash
-docker exec reto-prosperas-localstack /bin/bash /etc/localstack/init/ready.d/init-aws.sh
+docker exec harrison-prosperas-localstack /bin/bash /etc/localstack/init/ready.d/init-aws.sh
 ```
 
 Deberías ver:
@@ -279,9 +279,9 @@ docker compose ps
 **Salida esperada:**
 ```
 NAME                        IMAGE                          COMMAND                  SERVICE      STATUS          PORTS
-reto-prosperas-api          reto-prosperas2-app            "uvicorn src.adapters…"   app          Up              0.0.0.0:8000->8000/tcp
-reto-prosperas-localstack   localstack/localstack:latest   "docker-entrypoint.sh"   localstack   Up (healthy)    0.0.0.0:4566->4566/tcp
-reto-prosperas-worker       reto-prosperas2-worker         "python -m worker.ma…"    worker       Up
+harrison-prosperas-api          harrison-prosperas-app            "uvicorn src.adapters…"   app          Up              0.0.0.0:8000->8000/tcp
+harrison-prosperas-localstack   localstack/localstack:latest   "docker-entrypoint.sh"   localstack   Up (healthy)    0.0.0.0:4566->4566/tcp
+harrison-prosperas-worker       harrison-prosperas-worker         "python -m worker.ma…"    worker       Up
 ```
 
 ### Verificar Recursos AWS
@@ -344,7 +344,7 @@ docker compose down
 docker compose down -v
 
 # Eliminar imágenes
-docker rmi reto-prosperas2-app reto-prosperas2-worker
+docker rmi harrison-prosperas-app harrison-prosperas-worker
 ```
 
 ---
@@ -352,7 +352,7 @@ docker rmi reto-prosperas2-app reto-prosperas2-worker
 ## 📁 Estructura del Proyecto
 
 ```
-reto-prosperas2/
+harrison-prosperas-challenge/
 ├── backend/                    # FastAPI REST API
 │   ├── app/
 │   │   ├── main.py             # App con exception handlers globales
