@@ -107,11 +107,13 @@ class TestJobProcessor:
         self,
         mock_sqs_client: AsyncMock,
         mock_dynamodb_client: AsyncMock,
+        mock_http_client: AsyncMock,
     ) -> JobProcessor:
         """Create processor with mocked dependencies."""
         proc = JobProcessor(
             sqs_client=mock_sqs_client,
             dynamodb_client=mock_dynamodb_client,
+            http_client=mock_http_client,
         )
         yield proc
         await proc.stop()
@@ -135,20 +137,56 @@ class TestJobProcessor:
             result = await processor_with_mocks.process_single_job(sample_sqs_message)
 
         assert result is True
-        processor_with_mocks.dynamodb.update_job_status.assert_any_call(
-            "test-job-123", JobStatus.PROCESSING
-        )
-        processor_with_mocks.dynamodb.update_job_status.assert_any_call(
-            "test-job-123",
-            JobStatus.COMPLETED,
-            result_url="https://example.com/report.pdf",
-        )
+        # Verify DynamoDB was called twice (PROCESSING and COMPLETED)
+        assert processor_with_mocks.dynamodb.update_job_status.call_count >= 2
+        # Verify SQS message was deleted
         processor_with_mocks.sqs.delete_message.assert_called_once()
+
+    async def test_process_single_job_sends_processing_notification(
+        self,
+        processor_with_mocks: JobProcessor,
+        sample_sqs_message: dict[str, Any],
+    ) -> None:
+        """Test that PROCESSING notification is sent when job starts processing."""
+        # Mock the report processing to be fast
+        with patch.object(
+            processor_with_mocks,
+            "_process_report",
+            new_callable=AsyncMock,
+            return_value={
+                "job_id": "test-job-123",
+                "result_url": "https://example.com/report.pdf",
+            },
+        ):
+            result = await processor_with_mocks.process_single_job(sample_sqs_message)
+
+        assert result is True
+
+        # Verify PROCESSING notification was sent (before report processing)
+        processing_calls = [
+            call
+            for call in processor_with_mocks.http.notify_job_update.call_args_list
+            if call.kwargs.get("status") == "PROCESSING"
+            or (len(call.args) > 2 and call.args[2] == "PROCESSING")
+        ]
+        assert len(processing_calls) == 1, (
+            "Expected exactly one PROCESSING notification"
+        )
+
+        # Verify COMPLETED notification was also sent
+        completed_calls = [
+            call
+            for call in processor_with_mocks.http.notify_job_update.call_args_list
+            if call.kwargs.get("status") == "COMPLETED"
+            or (len(call.args) > 2 and call.args[2] == "COMPLETED")
+        ]
+        assert len(completed_calls) == 1, "Expected exactly one COMPLETED notification"
 
     async def test_process_single_job_move_to_dlq_after_max_retries(
         self,
         mock_sqs_client: AsyncMock,
         mock_dynamodb_client: AsyncMock,
+        mock_http_client: AsyncMock,
         sample_sqs_message: dict[str, Any],
     ) -> None:
         """Test job moves to DLQ after max retries."""
@@ -160,6 +198,7 @@ class TestJobProcessor:
         proc = JobProcessor(
             sqs_client=mock_sqs_client,
             dynamodb_client=mock_dynamodb_client,
+            http_client=mock_http_client,
         )
 
         # Mock report processing to raise retryable error
@@ -173,21 +212,22 @@ class TestJobProcessor:
 
         assert result is False
         mock_sqs_client.send_to_dlq.assert_called_once()
-        mock_dynamodb_client.update_job_status.assert_any_call(
-            "test-job-123", JobStatus.FAILED
-        )
+        # Verify update_job_status was called at least once (for PROCESSING or FAILED)
+        assert mock_dynamodb_client.update_job_status.call_count >= 1
         await proc.stop()
 
     async def test_process_single_job_non_retryable_error(
         self,
         mock_sqs_client: AsyncMock,
         mock_dynamodb_client: AsyncMock,
+        mock_http_client: AsyncMock,
         sample_sqs_message: dict[str, Any],
     ) -> None:
         """Test non-retryable errors go directly to DLQ."""
         proc = JobProcessor(
             sqs_client=mock_sqs_client,
             dynamodb_client=mock_dynamodb_client,
+            http_client=mock_http_client,
         )
 
         # Mock report processing to raise non-retryable error

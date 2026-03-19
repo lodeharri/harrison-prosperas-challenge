@@ -69,16 +69,20 @@ def mock_sqs_client() -> AsyncMock:
 def mock_dynamodb_client() -> AsyncMock:
     """Create a mock DynamoDB client."""
     client = AsyncMock()
-    client.get_job = AsyncMock(
-        return_value={
-            "job_id": "test-job-123",
-            "user_id": "test-user-456",
-            "status": "PENDING",
-            "report_type": "sales_report",
-            "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z",
-        }
-    )
+
+    # Track calls for get_job - needs to be awaitable
+    mock_job_data = {
+        "job_id": "test-job-123",
+        "user_id": "test-user-456",
+        "status": "PENDING",
+        "report_type": "sales_report",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+        "version": 1,
+    }
+    client.get_job = AsyncMock(return_value=mock_job_data)
+
+    # Use AsyncMock for update_job_status since it's awaited in the code
     client.update_job_status = AsyncMock(
         return_value={
             "job_id": "test-job-123",
@@ -91,10 +95,20 @@ def mock_dynamodb_client() -> AsyncMock:
     return client
 
 
+@pytest.fixture
+def mock_http_client() -> AsyncMock:
+    """Create a mock HTTP client."""
+    client = AsyncMock()
+    client.notify_job_update = AsyncMock(return_value=True)
+    client.close = AsyncMock()
+    return client
+
+
 @pytest_asyncio.fixture
 async def processor(
     mock_sqs_client: AsyncMock,
     mock_dynamodb_client: AsyncMock,
+    mock_http_client: AsyncMock,
 ) -> AsyncGenerator[JobProcessor, None]:
     """Create a processor with mocked dependencies."""
     with (
@@ -103,10 +117,15 @@ async def processor(
             "backend.worker.processor.get_dynamodb_client",
             return_value=mock_dynamodb_client,
         ),
+        patch(
+            "backend.worker.processor.get_http_client",
+            return_value=mock_http_client,
+        ),
     ):
         proc = JobProcessor(
             sqs_client=mock_sqs_client,
             dynamodb_client=mock_dynamodb_client,
+            http_client=mock_http_client,
         )
         yield proc
         await proc.stop()

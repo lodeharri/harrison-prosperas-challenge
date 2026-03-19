@@ -170,6 +170,16 @@ class JobProcessor:
                 expected_version=current_version,
             )
 
+            # Notify API for WebSocket when status changes to PROCESSING
+            processing_updated_at = datetime.now(timezone.utc).isoformat()
+            await self.http.notify_job_update(
+                user_id=job_message.user_id,
+                job_id=job_id,
+                status=JobStatus.PROCESSING.value,
+                updated_at=processing_updated_at,
+                report_type=job_message.report_type,
+            )
+
             # Check circuit breaker
             is_open, retry_after = await self.circuit_breaker.is_open(
                 job_message.report_type

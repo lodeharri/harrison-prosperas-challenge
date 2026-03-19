@@ -10,6 +10,8 @@ tools:
   bash: true
   filesystem_read: true
 permission:
+  bash:
+    "docker *": deny
   write:
     "frontend/**": deny
     "infra/**": deny

@@ -441,7 +441,7 @@ class TestDynamoDBJobRepositoryListByUser:
         """Test listing jobs for user successfully."""
         repo = MockDynamoDBJobRepository(settings=mock_settings)
         mock_table = MagicMock()
-        mock_table.scan.return_value = {
+        mock_table.query.return_value = {
             "Items": [
                 {
                     "job_id": "job-1",
@@ -473,16 +473,23 @@ class TestDynamoDBJobRepositoryListByUser:
 
         assert len(jobs) == 2
         assert total == 2
-        # Should be sorted by created_at descending
+        # Should be sorted by created_at descending (via GSI)
         assert jobs[0].job_id == "job-1"
         assert jobs[1].job_id == "job-2"
+        # Verify query was called with correct parameters
+        mock_table.query.assert_called_once()
+        call_kwargs = mock_table.query.call_args.kwargs
+        assert call_kwargs["IndexName"] == "user_id-created_at-index"
+        assert "user_id = :user_id" in call_kwargs["KeyConditionExpression"]
+        assert call_kwargs["ExpressionAttributeValues"][":user_id"] == "user-456"
+        assert call_kwargs["ScanIndexForward"] is False
 
     @pytest.mark.asyncio
     async def test_list_by_user_pagination(self, mock_settings):
         """Test listing jobs with pagination."""
         repo = MockDynamoDBJobRepository(settings=mock_settings)
         mock_table = MagicMock()
-        mock_table.scan.return_value = {
+        mock_table.query.return_value = {
             "Items": [
                 {
                     "job_id": f"job-{i}",
@@ -505,18 +512,24 @@ class TestDynamoDBJobRepositoryListByUser:
 
         assert len(jobs) == 5
         assert total == 5
+        # Verify query was called with GSI
+        mock_table.query.assert_called_once()
+        call_kwargs = mock_table.query.call_args.kwargs
+        assert call_kwargs["IndexName"] == "user_id-created_at-index"
 
     @pytest.mark.asyncio
     async def test_list_by_user_enforces_minimum_page_size(self, mock_settings):
         """Test that list_by_user enforces minimum page size."""
         repo = MockDynamoDBJobRepository(settings=mock_settings)
         mock_table = MagicMock()
-        mock_table.scan.return_value = {"Items": []}
+        mock_table.query.return_value = {"Items": []}
         repo.set_mock_jobs_table(mock_table)
 
         jobs, total = await repo.list_by_user("user-456", page=1, page_size=10)
 
         assert total == 0
+        # Verify query was called with GSI
+        mock_table.query.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_list_by_user_client_error(self, mock_settings):
@@ -525,8 +538,8 @@ class TestDynamoDBJobRepositoryListByUser:
 
         repo = MockDynamoDBJobRepository(settings=mock_settings)
         mock_table = MagicMock()
-        mock_table.scan.side_effect = ClientError(
-            {"Error": {"Code": "InternalError", "Message": "Test"}}, "Scan"
+        mock_table.query.side_effect = ClientError(
+            {"Error": {"Code": "InternalError", "Message": "Test"}}, "Query"
         )
         repo.set_mock_jobs_table(mock_table)
 
