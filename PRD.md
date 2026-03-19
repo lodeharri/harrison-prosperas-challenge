@@ -28,7 +28,7 @@
 **2. Persistence (AWS Database)**
 * [x]Integrate an AWS database service to persist the state of each job.
 * [x]Implement the following minimum data model: `job_id`, `user_id`, `status`, `report_type`, `created_at`, `updated_at`, `result_url`.
-* [ ]Ensure queries to list jobs by `user_id` are highly efficient.
+* [x]Ensure queries to list jobs by `user_id` are highly efficient.
 * [x]Provide a script or clear programmatic instructions to initialize the database schema from scratch.
 
 **3. Message Queue & Asynchronous Workers (AWS)**

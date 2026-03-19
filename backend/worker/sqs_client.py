@@ -6,11 +6,21 @@ from typing import Any
 
 import aiobotocore.session
 import structlog
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionError, EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError, ConnectTimeoutError
 
 from backend.worker.config import Settings, get_settings
+from backend.worker.backoff import retry_with_backoff
 
 logger = structlog.get_logger(__name__)
+
+RETRYABLE_EXCEPTIONS = (
+    ClientError,
+    ConnectionError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+    ConnectTimeoutError,
+)
 
 
 class SQSClient:
@@ -30,6 +40,25 @@ class SQSClient:
         if self._session is None:
             self._session = aiobotocore.session.get_session()
         return self._session
+
+    async def _create_client_with_retry(self, service_name: str, **kwargs: Any) -> Any:
+        """Create an async client with retry on connection failures."""
+        session = await self._get_client()
+
+        async def create_client():
+            return session.create_client(service_name, **kwargs)
+
+        max_attempts = min(
+            5,
+            int(self.settings.backoff_max_delay / self.settings.backoff_base_delay) + 1,
+        )
+        return await retry_with_backoff(
+            create_client,
+            max_attempts=max_attempts,
+            base_delay=self.settings.backoff_base_delay,
+            max_delay=self.settings.backoff_max_delay,
+            retryable_exceptions=RETRYABLE_EXCEPTIONS,
+        )
 
     async def receive_messages(
         self,
@@ -61,7 +90,7 @@ class SQSClient:
             kwargs["VisibilityTimeout"] = visibility_timeout
 
         try:
-            async with session.create_client(
+            async with await self._create_client_with_retry(
                 "sqs",
                 endpoint_url=self.settings.aws_endpoint_url,
                 region_name=self.settings.aws_region,
@@ -132,7 +161,7 @@ class SQSClient:
                 attributes.get("ApproximateReceiveCount", {}).get("StringValue", 0)
             )
 
-            async with session.create_client(
+            async with await self._create_client_with_retry(
                 "sqs",
                 endpoint_url=self.settings.aws_endpoint_url,
                 region_name=self.settings.aws_region,
@@ -213,7 +242,7 @@ class SQSClient:
         session = await self._get_client()
 
         try:
-            async with session.create_client(
+            async with await self._create_client_with_retry(
                 "sqs",
                 endpoint_url=self.settings.aws_endpoint_url,
                 region_name=self.settings.aws_region,
@@ -227,7 +256,7 @@ class SQSClient:
         except ClientError:
             # Try to at least verify the client works
             try:
-                async with session.create_client(
+                async with await self._create_client_with_retry(
                     "sqs",
                     endpoint_url=self.settings.aws_endpoint_url,
                     region_name=self.settings.aws_region,

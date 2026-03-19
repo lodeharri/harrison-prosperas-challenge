@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionError, EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError, ConnectTimeoutError
 
 from backend.src.application.ports.job_repository import JobRepository
 from backend.src.config.settings import Settings, get_settings
@@ -23,8 +24,17 @@ from backend.src.domain.exceptions.domain_exceptions import (
     VersionConflictException,
 )
 from backend.src.domain.value_objects.job_status import JobStatus
+from backend.worker.backoff import retry_with_backoff_sync
 
 logger = logging.getLogger(__name__)
+
+RETRYABLE_EXCEPTIONS = (
+    ClientError,
+    ConnectionError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+    ConnectTimeoutError,
+)
 
 
 class DynamoDBJobRepository(JobRepository):
@@ -54,12 +64,29 @@ class DynamoDBJobRepository(JobRepository):
     def client(self) -> Any:
         """Get DynamoDB client with lazy initialization."""
         if self._client is None:
-            self._client = boto3.client(
-                "dynamodb",
-                endpoint_url=self._settings.aws_endpoint_url,
-                region_name=self._settings.aws_region,
-                aws_access_key_id=self._settings.aws_access_key_id,
-                aws_secret_access_key=self._settings.aws_secret_access_key,
+
+            def create_client() -> Any:
+                return boto3.client(
+                    "dynamodb",
+                    endpoint_url=self._settings.aws_endpoint_url,
+                    region_name=self._settings.aws_region,
+                    aws_access_key_id=self._settings.aws_access_key_id,
+                    aws_secret_access_key=self._settings.aws_secret_access_key,
+                )
+
+            max_attempts = min(
+                5,
+                int(
+                    self._settings.backoff_max_delay / self._settings.backoff_base_delay
+                )
+                + 1,
+            )
+            self._client = retry_with_backoff_sync(
+                create_client,
+                max_attempts=max_attempts,
+                base_delay=self._settings.backoff_base_delay,
+                max_delay=self._settings.backoff_max_delay,
+                retryable_exceptions=RETRYABLE_EXCEPTIONS,
             )
         return self._client
 
@@ -67,12 +94,29 @@ class DynamoDBJobRepository(JobRepository):
     def jobs_table(self) -> Any:
         """Get DynamoDB jobs table resource with lazy initialization."""
         if self._jobs_table is None:
-            resource = boto3.resource(
-                "dynamodb",
-                endpoint_url=self._settings.aws_endpoint_url,
-                region_name=self._settings.aws_region,
-                aws_access_key_id=self._settings.aws_access_key_id,
-                aws_secret_access_key=self._settings.aws_secret_access_key,
+
+            def create_resource() -> Any:
+                return boto3.resource(
+                    "dynamodb",
+                    endpoint_url=self._settings.aws_endpoint_url,
+                    region_name=self._settings.aws_region,
+                    aws_access_key_id=self._settings.aws_access_key_id,
+                    aws_secret_access_key=self._settings.aws_secret_access_key,
+                )
+
+            max_attempts = min(
+                5,
+                int(
+                    self._settings.backoff_max_delay / self._settings.backoff_base_delay
+                )
+                + 1,
+            )
+            resource = retry_with_backoff_sync(
+                create_resource,
+                max_attempts=max_attempts,
+                base_delay=self._settings.backoff_base_delay,
+                max_delay=self._settings.backoff_max_delay,
+                retryable_exceptions=RETRYABLE_EXCEPTIONS,
             )
             self._jobs_table = resource.Table(self._settings.dynamodb_table_jobs)
         return self._jobs_table
@@ -81,12 +125,29 @@ class DynamoDBJobRepository(JobRepository):
     def idempotency_table(self) -> Any:
         """Get DynamoDB idempotency keys table resource with lazy initialization."""
         if self._idempotency_table is None:
-            resource = boto3.resource(
-                "dynamodb",
-                endpoint_url=self._settings.aws_endpoint_url,
-                region_name=self._settings.aws_region,
-                aws_access_key_id=self._settings.aws_access_key_id,
-                aws_secret_access_key=self._settings.aws_secret_access_key,
+
+            def create_resource() -> Any:
+                return boto3.resource(
+                    "dynamodb",
+                    endpoint_url=self._settings.aws_endpoint_url,
+                    region_name=self._settings.aws_region,
+                    aws_access_key_id=self._settings.aws_access_key_id,
+                    aws_secret_access_key=self._settings.aws_secret_access_key,
+                )
+
+            max_attempts = min(
+                5,
+                int(
+                    self._settings.backoff_max_delay / self._settings.backoff_base_delay
+                )
+                + 1,
+            )
+            resource = retry_with_backoff_sync(
+                create_resource,
+                max_attempts=max_attempts,
+                base_delay=self._settings.backoff_base_delay,
+                max_delay=self._settings.backoff_max_delay,
+                retryable_exceptions=RETRYABLE_EXCEPTIONS,
             )
             self._idempotency_table = resource.Table(
                 self._settings.dynamodb_table_idempotency

@@ -10,13 +10,23 @@ import logging
 from typing import Any
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionError, EndpointConnectionError
+from botocore.exceptions import ReadTimeoutError, ConnectTimeoutError
 
 from backend.src.application.ports.job_queue import JobQueue
 from backend.src.config.settings import Settings, get_settings
 from backend.src.domain.entities.job import Job
+from backend.worker.backoff import retry_with_backoff_sync
 
 logger = logging.getLogger(__name__)
+
+RETRYABLE_EXCEPTIONS = (
+    ClientError,
+    ConnectionError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+    ConnectTimeoutError,
+)
 
 # Report types that should be routed to high priority queue
 HIGH_PRIORITY_REPORT_TYPES = {"sales_report", "financial_report"}
@@ -45,12 +55,29 @@ class SQSJobQueue(JobQueue):
     def client(self) -> Any:
         """Get SQS client with lazy initialization."""
         if self._client is None:
-            self._client = boto3.client(
-                "sqs",
-                endpoint_url=self._settings.aws_endpoint_url,
-                region_name=self._settings.aws_region,
-                aws_access_key_id=self._settings.aws_access_key_id,
-                aws_secret_access_key=self._settings.aws_secret_access_key,
+
+            def create_client() -> Any:
+                return boto3.client(
+                    "sqs",
+                    endpoint_url=self._settings.aws_endpoint_url,
+                    region_name=self._settings.aws_region,
+                    aws_access_key_id=self._settings.aws_access_key_id,
+                    aws_secret_access_key=self._settings.aws_secret_access_key,
+                )
+
+            max_attempts = min(
+                5,
+                int(
+                    self._settings.backoff_max_delay / self._settings.backoff_base_delay
+                )
+                + 1,
+            )
+            self._client = retry_with_backoff_sync(
+                create_client,
+                max_attempts=max_attempts,
+                base_delay=self._settings.backoff_base_delay,
+                max_delay=self._settings.backoff_max_delay,
+                retryable_exceptions=RETRYABLE_EXCEPTIONS,
             )
         return self._client
 

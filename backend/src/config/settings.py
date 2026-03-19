@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     cloudwatch_log_group: str = "/reto-prosperas/jobs"
     cloudwatch_stream_name: str = "worker"
 
+    # Backoff
+    backoff_base_delay: float = 1.0
+    backoff_max_delay: float = 60.0
+
 
 @lru_cache
 def get_settings() -> Settings:
