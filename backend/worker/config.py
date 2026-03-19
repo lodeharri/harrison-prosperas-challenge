@@ -3,13 +3,14 @@
 Loads configuration from environment variables with sensible defaults
 for local development with LocalStack.
 """
-
+import os
+from dotenv import load_dotenv
 from functools import lru_cache
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
+load_dotenv()
 class Settings(BaseSettings):
     """Worker settings loaded from environment variables."""
 
@@ -21,20 +22,18 @@ class Settings(BaseSettings):
     )
 
     # AWS Configuration
-    aws_endpoint_url: str = "http://localhost:4566"
-    aws_region: str = "us-east-1"
-    aws_access_key_id: str = "test"
-    aws_secret_access_key: str = "test"
+    aws_endpoint_url: str = os.getenv("AWS_ENDPOINT_URL")
+    aws_region: str =  os.getenv("AWS_REGION")
+    aws_access_key_id: str =  os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key: str =  os.getenv("AWS_SECRET_ACCESS_KEY")
 
     # DynamoDB
-    dynamodb_table_jobs: str = "jobs"
+    dynamodb_table_jobs: str = os.getenv("DYNAMODB_TABLE_JOBS")
 
     # SQS
-    sqs_queue_url: str = "http://localhost:4566/000000000000/report-jobs-queue"
-    sqs_dlq_url: str = "http://localhost:4566/000000000000/report-jobs-dlq"
-    sqs_priority_queue_url: str = (
-        "http://localhost:4566/000000000000/report-jobs-priority"
-    )
+    sqs_queue_url: str =  os.getenv("SQS_QUEUE_URL")
+    sqs_dlq_url: str =  os.getenv("SQS_DLQ_URL")
+    sqs_priority_queue_url: str =  os.getenv("SQS_PRIORITY_QUEUE_URL")
 
     # Worker Settings
     max_concurrent_jobs: int = 10
