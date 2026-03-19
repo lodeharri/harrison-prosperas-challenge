@@ -33,6 +33,21 @@ class JobCreate(BaseModel):
         str,
         Field(min_length=1, max_length=100, description="Type of report to generate"),
     ]
+    date_range: Annotated[
+        str,
+        Field(
+            default="all",
+            description="Date range for the report, e.g. '2024-01-01 to 2024-01-31' or 'all'",
+        ),
+    ] = "all"
+    format: Annotated[
+        str,
+        Field(
+            default="pdf",
+            description="Output format for the report",
+            pattern="^(pdf|csv|excel)$",
+        ),
+    ] = "pdf"
 
 
 class JobResponse(BaseModel):
@@ -44,6 +59,14 @@ class JobResponse(BaseModel):
     user_id: str = Field(description="User who created the job")
     status: JobStatus = Field(description="Current job status")
     report_type: str = Field(description="Type of report")
+    date_range: str = Field(
+        default="all",
+        description="Date range for the report",
+    )
+    format: str = Field(
+        default="pdf",
+        description="Output format for the report",
+    )
     created_at: datetime = Field(description="Job creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
     result_url: str | None = Field(
@@ -51,13 +74,15 @@ class JobResponse(BaseModel):
     )
 
     @classmethod
-    def from_entity(cls, job: Job) -> "JobResponse":
+    def from_entity(cls, job: "Job") -> "JobResponse":
         """Create response from domain entity."""
         return cls(
             job_id=job.job_id,
             user_id=job.user_id,
             status=job.status,
             report_type=job.report_type,
+            date_range=job.date_range,
+            format=job.format,
             created_at=job.created_at,
             updated_at=job.updated_at,
             result_url=job.result_url,
@@ -69,6 +94,10 @@ class JobCreateResponse(BaseModel):
 
     job_id: str = Field(description="Unique job identifier")
     status: JobStatus = Field(description="Initial job status (PENDING)")
+    idempotent: bool = Field(
+        default=False,
+        description="Whether this response was served from an existing idempotency key",
+    )
 
 
 class JobListResponse(BaseModel):

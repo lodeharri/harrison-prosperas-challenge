@@ -86,10 +86,36 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production-use-openssl-rand-hex-32}
       - JWT_ALGORITHM=HS256
       - WORKER_CONCURRENCY=2
+      - API_BASE_URL=http://app:8000
     depends_on:
       localstack:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - reto-network
+
+  # ==========================================================================
+  # Frontend - React SPA (Production build with Nginx)
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: harrison-prosperas-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - reto-network
 

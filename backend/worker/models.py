@@ -29,6 +29,14 @@ class JobMessage(BaseModel):
     job_id: str = Field(description="Unique job identifier")
     user_id: str = Field(description="User who created the job")
     report_type: str = Field(description="Type of report to generate")
+    date_range: str = Field(
+        default="all",
+        description="Date range for the report",
+    )
+    format: str = Field(
+        default="pdf",
+        description="Output format for the report",
+    )
     priority: JobPriority = Field(
         default=JobPriority.STANDARD,
         description="Job priority level",
@@ -71,6 +79,8 @@ class JobData(BaseModel):
     user_id: str
     status: JobStatus
     report_type: str
+    date_range: str = "all"
+    format: str = "pdf"
     created_at: datetime
     updated_at: datetime
     result_url: str | None = None
@@ -82,6 +92,8 @@ class JobData(BaseModel):
             "user_id": {"S": self.user_id},
             "status": {"S": self.status.value},
             "report_type": {"S": self.report_type},
+            "date_range": {"S": self.date_range},
+            "format": {"S": self.format},
             "created_at": {"S": self.created_at.isoformat()},
             "updated_at": {"S": self.updated_at.isoformat()},
         }

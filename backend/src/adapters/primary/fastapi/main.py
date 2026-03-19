@@ -11,16 +11,36 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
+from starlette.websockets import WebSocket
 
-from backend.src.adapters.primary.fastapi.routes import auth_router, jobs
+from backend.src.adapters.primary.fastapi.routes import (
+    auth_router,
+    jobs,
+    notify_router,
+)
+from backend.src.adapters.primary.fastapi.routes.ws_routes import router as ws_router
 from backend.src.adapters.primary.fastapi.routes.dependencies import (
     get_job_queue,
     get_job_repository,
 )
 from backend.src.config.settings import get_settings
-from backend.src.shared.exceptions import AppException
+from backend.src.domain.exceptions.domain_exceptions import VersionConflictException
+from backend.src.shared.exceptions import AppException, ConflictException
 from backend.src.shared.schemas import ErrorDetail, ErrorResponse, HealthResponse
+
+# Allowed CORS origins for frontend access
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
 
 if TYPE_CHECKING:
     from backend.src.config.settings import Settings
@@ -57,9 +77,30 @@ def create_app(settings: "Settings | None" = None) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    # =========================================================================
+    # CORS Configuration - Use FastAPI's CORSMiddleware
+    # Note: This middleware runs at the ASGI level, before route matching
+    # =========================================================================
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     # Include routers
     app.include_router(jobs.router)
     app.include_router(auth_router)
+    app.include_router(ws_router, prefix="/ws")
+    app.include_router(notify_router)
     app.include_router(router)  # Health check router
 
     # Register exception handlers
@@ -90,6 +131,50 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=exc.to_dict(),
+        )
+
+    @app.exception_handler(ConflictException)
+    async def conflict_exception_handler(
+        request: Request,
+        exc: ConflictException,
+    ) -> JSONResponse:
+        """
+        Handle conflict exceptions (e.g., race conditions).
+
+        Returns 409 Conflict with details about the conflict.
+        """
+        logger.warning(
+            f"ConflictException: {exc.error_code} - {exc.message} "
+            f"(path: {request.url.path})"
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_dict(),
+        )
+
+    @app.exception_handler(VersionConflictException)
+    async def version_conflict_exception_handler(
+        request: Request,
+        exc: VersionConflictException,
+    ) -> JSONResponse:
+        """
+        Handle version conflict exceptions from optimistic locking.
+
+        Returns 409 Conflict with version mismatch details.
+        """
+        logger.warning(
+            f"VersionConflictException: {exc.code} - {exc.message} "
+            f"(path: {request.url.path})"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                }
+            },
         )
 
     @app.exception_handler(RequestValidationError)

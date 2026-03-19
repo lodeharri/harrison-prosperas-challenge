@@ -69,6 +69,8 @@ class SQSJobQueue(JobQueue):
                 "job_id": job.job_id,
                 "user_id": job.user_id,
                 "report_type": job.report_type,
+                "date_range": job.date_range,
+                "format": job.format,
             }
 
             self.client.send_message(
@@ -104,6 +106,8 @@ class SQSJobQueue(JobQueue):
                 "job_id": job.job_id,
                 "user_id": job.user_id,
                 "report_type": job.report_type,
+                "date_range": job.date_range,
+                "format": job.format,
                 "priority": "high",
                 "created_at": job.created_at.isoformat(),
             }

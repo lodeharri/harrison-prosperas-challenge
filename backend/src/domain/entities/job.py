@@ -24,19 +24,25 @@ class Job:
         job_id: Unique identifier for the job
         user_id: User who created the job
         report_type: Type of report to generate
+        date_range: Date range for the report (YYYY-MM-DD to YYYY-MM-DD or 'all')
+        format: Output format (pdf, csv, excel)
         status: Current job status
         created_at: When the job was created
         updated_at: When the job was last updated
         result_url: URL to download results (only if completed)
+        version: Version number for optimistic locking
     """
 
     job_id: str
     user_id: str
     report_type: str
+    date_range: str = "all"
+    format: str = "pdf"
     status: JobStatus = JobStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     result_url: str | None = None
+    version: int = 1
 
     @classmethod
     def create(
@@ -44,6 +50,8 @@ class Job:
         job_id: str,
         user_id: str,
         report_type: str,
+        date_range: str = "all",
+        format: str = "pdf",
     ) -> "Job":
         """
         Factory method to create a new job.
@@ -52,6 +60,8 @@ class Job:
             job_id: Unique identifier
             user_id: User creating the job
             report_type: Type of report
+            date_range: Date range for the report
+            format: Output format (pdf, csv, excel)
 
         Returns:
             New Job instance in PENDING status
@@ -60,10 +70,13 @@ class Job:
             job_id=job_id,
             user_id=user_id,
             report_type=report_type,
+            date_range=date_range,
+            format=format,
             status=JobStatus.PENDING,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             result_url=None,
+            version=1,
         )
 
     def transition_to(self, new_status: JobStatus) -> None:
@@ -117,10 +130,13 @@ class Job:
             "job_id": self.job_id,
             "user_id": self.user_id,
             "report_type": self.report_type,
+            "date_range": self.date_range,
+            "format": self.format,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "result_url": self.result_url,
+            "version": self.version,
         }
 
     @classmethod
@@ -151,8 +167,11 @@ class Job:
             job_id=data["job_id"],
             user_id=data["user_id"],
             report_type=data["report_type"],
+            date_range=data.get("date_range", "all"),
+            format=data.get("format", "pdf"),
             status=JobStatus(data.get("status", "PENDING")),
             created_at=created_at,
             updated_at=updated_at,
             result_url=data.get("result_url"),
+            version=data.get("version", 1),
         )

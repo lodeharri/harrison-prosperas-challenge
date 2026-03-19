@@ -1,16 +1,16 @@
 """DynamoDB client for job status operations."""
 
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
 import aiobotocore.session
+import structlog
 from botocore.exceptions import ClientError
 
 from backend.worker.config import Settings, get_settings
 from backend.worker.models import JobStatus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DynamoDBClient:

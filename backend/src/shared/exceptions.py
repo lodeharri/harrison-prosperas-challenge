@@ -69,6 +69,28 @@ class ForbiddenException(AppException):
         )
 
 
+class ConflictException(AppException):
+    """Raised when there's a race condition conflict (e.g., version mismatch)."""
+
+    def __init__(
+        self,
+        resource: str,
+        message: str = "Resource was modified by another request",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        # Merge resource into details
+        merged_details = {"resource": resource}
+        if details:
+            merged_details.update(details)
+
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            message=message,
+            error_code="CONFLICT",
+            details=merged_details,
+        )
+
+
 def http_exception_from_app_exception(exc: AppException) -> HTTPException:
     """Convert AppException to FastAPI HTTPException."""
     return HTTPException(

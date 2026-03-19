@@ -3,7 +3,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from backend.src.application.use_cases.create_job import CreateJobUseCase
+from backend.src.application.use_cases.create_job import (
+    CreateJobResult,
+    CreateJobUseCase,
+)
 from backend.src.application.use_cases.get_job import GetJobUseCase
 from backend.src.application.use_cases.list_jobs import ListJobsUseCase
 from backend.src.domain.entities.job import Job
@@ -22,6 +25,8 @@ class TestCreateJobUseCase:
         """Create a mock repository."""
         repo = MagicMock()
         repo.create = AsyncMock(return_value=None)
+        repo.get_by_idempotency_key = AsyncMock(return_value=None)
+        repo.save_idempotency_key = AsyncMock(return_value=None)
         return repo
 
     @pytest.fixture
@@ -40,10 +45,15 @@ class TestCreateJobUseCase:
             job_queue=mock_queue,
         )
 
-        job = await use_case.execute(
+        result = await use_case.execute(
             user_id="user-123",
             report_type="sales_report",
         )
+
+        # Verify result is CreateJobResult with idempotent=False
+        assert isinstance(result, CreateJobResult)
+        assert result.idempotent is False
+        job = result.job
 
         # Verify job was created with correct attributes
         assert job.user_id == "user-123"
@@ -66,11 +76,12 @@ class TestCreateJobUseCase:
             job_queue=mock_queue,
         )
 
-        job = await use_case.execute(
+        result = await use_case.execute(
             user_id="user-123",
             report_type="inventory_report",
         )
 
+        job = result.job
         # Verify job was created with correct attributes
         assert job.user_id == "user-123"
         assert job.report_type == "inventory_report"
@@ -79,6 +90,73 @@ class TestCreateJobUseCase:
         # Verify standard queue was called for non-high-priority report type
         mock_queue.publish.assert_called_once()
         mock_queue.publish_priority.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_existing_job_for_idempotency_key(
+        self, mock_repository, mock_queue
+    ):
+        """Test that use case returns existing job when idempotency key matches."""
+        # Create an existing job
+        existing_job = Job.create(
+            job_id="existing-job-123",
+            user_id="user-123",
+            report_type="sales_report",
+        )
+        mock_repository.get_by_idempotency_key = AsyncMock(return_value=existing_job)
+
+        use_case = CreateJobUseCase(
+            job_repository=mock_repository,
+            job_queue=mock_queue,
+        )
+
+        result = await use_case.execute(
+            user_id="user-123",
+            report_type="sales_report",
+            idempotency_key="my-unique-key-123",
+        )
+
+        # Verify result indicates idempotent response
+        assert isinstance(result, CreateJobResult)
+        assert result.idempotent is True
+        assert result.job.job_id == "existing-job-123"
+
+        # Verify no new job was created
+        mock_repository.create.assert_not_called()
+
+        # Verify no message was published
+        mock_queue.publish.assert_not_called()
+        mock_queue.publish_priority.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_creates_new_job_and_saves_idempotency_key(
+        self, mock_repository, mock_queue
+    ):
+        """Test that use case saves idempotency key after creating job."""
+        use_case = CreateJobUseCase(
+            job_repository=mock_repository,
+            job_queue=mock_queue,
+        )
+
+        result = await use_case.execute(
+            user_id="user-123",
+            report_type="sales_report",
+            idempotency_key="my-unique-key-456",
+        )
+
+        # Verify idempotency key was checked first
+        mock_repository.get_by_idempotency_key.assert_called_once_with(
+            "my-unique-key-456"
+        )
+
+        # Verify idempotency key was saved after job creation
+        mock_repository.save_idempotency_key.assert_called_once()
+        call_args = mock_repository.save_idempotency_key.call_args
+        assert call_args.kwargs["idempotency_key"] == "my-unique-key-456"
+        assert call_args.kwargs["job_id"] == result.job.job_id
+        assert call_args.kwargs["expires_at"] is not None
+
+        # Verify result is not idempotent
+        assert result.idempotent is False
 
 
 class TestGetJobUseCase:

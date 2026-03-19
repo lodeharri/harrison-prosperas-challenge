@@ -87,3 +87,33 @@ class JobAccessDeniedException(DomainException):
         )
         self.job_id = job_id
         self.user_id = user_id
+
+
+class VersionConflictException(DomainException):
+    """Raised when optimistic locking detects a version mismatch."""
+
+    def __init__(
+        self,
+        job_id: str,
+        expected_version: int,
+        actual_version: int | None = None,
+    ) -> None:
+        details = {
+            "job_id": job_id,
+            "expected_version": expected_version,
+        }
+        if actual_version is not None:
+            details["actual_version"] = actual_version
+
+        super().__init__(
+            message=(
+                f"Job '{job_id}' was modified by another request. "
+                f"Expected version {expected_version}"
+                + (f", found {actual_version}" if actual_version is not None else "")
+            ),
+            code="VERSION_CONFLICT",
+            details=details,
+        )
+        self.job_id = job_id
+        self.expected_version = expected_version
+        self.actual_version = actual_version

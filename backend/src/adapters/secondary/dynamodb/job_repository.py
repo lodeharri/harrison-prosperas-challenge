@@ -5,7 +5,7 @@ It handles all the translation between domain entities and DynamoDB items.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import boto3
@@ -14,10 +14,16 @@ from botocore.exceptions import ClientError
 from backend.src.application.ports.job_repository import JobRepository
 from backend.src.config.settings import Settings, get_settings
 from backend.src.domain.entities.job import Job
-from backend.src.domain.exceptions.domain_exceptions import JobNotFoundException
+from backend.src.domain.exceptions.domain_exceptions import (
+    JobNotFoundException,
+    VersionConflictException,
+)
 from backend.src.domain.value_objects.job_status import JobStatus
 
 logger = logging.getLogger(__name__)
+
+# Idempotency key TTL (24 hours)
+IDEMPOTENCY_KEY_TTL_HOURS = 24
 
 
 class DynamoDBJobRepository(JobRepository):
@@ -174,10 +180,11 @@ class DynamoDBJobRepository(JobRepository):
             The updated job
         """
         try:
-            update_expression = "SET #status = :status, updated_at = :updated_at"
+            update_expression = "SET #status = :status, updated_at = :updated_at, #version = #version + :inc"
             expression_values: dict[str, Any] = {
                 ":status": status.value,
                 ":updated_at": datetime.now(timezone.utc).isoformat(),
+                ":inc": 1,
             }
 
             if result_url is not None:
@@ -187,7 +194,10 @@ class DynamoDBJobRepository(JobRepository):
             response = self.table.update_item(
                 Key={"job_id": job_id},
                 UpdateExpression=update_expression,
-                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeNames={
+                    "#status": "status",
+                    "#version": "version",
+                },
                 ExpressionAttributeValues=expression_values,
                 ReturnValues="ALL_NEW",
             )
@@ -197,6 +207,186 @@ class DynamoDBJobRepository(JobRepository):
         except ClientError as e:
             logger.error(f"Failed to update job {job_id}: {e}")
             raise
+
+    async def update_status_with_version(
+        self,
+        job_id: str,
+        expected_version: int,
+        status: JobStatus,
+        result_url: str | None = None,
+    ) -> Job:
+        """
+        Update a job's status with optimistic locking.
+
+        Uses conditional writes to prevent race conditions. If the version
+        doesn't match, raises VersionConflictException.
+
+        Args:
+            job_id: Job identifier
+            expected_version: Expected current version
+            status: New status
+            result_url: Optional result URL (for completed jobs)
+
+        Returns:
+            The updated job with incremented version
+
+        Raises:
+            VersionConflictException: If version doesn't match
+        """
+        try:
+            update_expression = "SET #status = :status, updated_at = :updated_at, #version = :new_version"
+            expression_values: dict[str, Any] = {
+                ":status": status.value,
+                ":updated_at": datetime.now(timezone.utc).isoformat(),
+                ":expected_version": expected_version,
+                ":new_version": expected_version + 1,
+            }
+
+            if result_url is not None:
+                update_expression += ", result_url = :result_url"
+                expression_values[":result_url"] = result_url
+
+            response = self.table.update_item(
+                Key={"job_id": job_id},
+                UpdateExpression=update_expression,
+                ConditionExpression="#version = :expected_version",
+                ExpressionAttributeNames={
+                    "#status": "status",
+                    "#version": "version",
+                },
+                ExpressionAttributeValues=expression_values,
+                ReturnValues="ALL_NEW",
+            )
+            logger.info(
+                f"Updated job {job_id} status to {status.value} "
+                f"(version {expected_version} -> {expected_version + 1})"
+            )
+            return self._from_dynamodb_item(response["Attributes"])
+
+        except ClientError as e:
+            # Check if this is a conditional check failed error
+            if (
+                e.response.get("Error", {}).get("Code")
+                == "ConditionalCheckFailedException"
+            ):
+                # Get the actual current version to report in the exception
+                try:
+                    current = await self.get_by_id(job_id)
+                    actual_version = current.version
+                except JobNotFoundException:
+                    actual_version = None
+
+                logger.warning(
+                    f"Version conflict for job {job_id}: "
+                    f"expected {expected_version}, found {actual_version}"
+                )
+                raise VersionConflictException(
+                    job_id=job_id,
+                    expected_version=expected_version,
+                    actual_version=actual_version,
+                )
+            # Other ClientError - re-raise
+            logger.error(f"Failed to update job {job_id}: {e}")
+            raise
+
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Job | None:
+        """
+        Retrieve a job by its idempotency key.
+
+        Uses a separate table or GSI to look up the idempotency key.
+        In this implementation, we use a prefixed pattern in the jobs table.
+
+        Args:
+            idempotency_key: The idempotency key to look up
+
+        Returns:
+            The job entity if found, None otherwise
+        """
+        try:
+            # Query using GSI on idempotency_key
+            response = self.table.query(
+                IndexName="idempotency_key-index",
+                KeyConditionExpression="idempotency_key = :key",
+                ExpressionAttributeValues={
+                    ":key": idempotency_key,
+                },
+                Limit=1,
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            return self._from_dynamodb_item(items[0])
+
+        except ClientError as e:
+            # If the index doesn't exist, fall back to scan (not recommended for production)
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                logger.warning(f"idempotency_key-index not found, falling back to scan")
+                return await self._scan_by_idempotency_key(idempotency_key)
+            logger.error(f"Failed to get job by idempotency key {idempotency_key}: {e}")
+            raise
+
+    async def _scan_by_idempotency_key(self, idempotency_key: str) -> Job | None:
+        """
+        Fallback scan for idempotency key lookup.
+
+        This is less efficient than using an index but works when
+        the GSI doesn't exist.
+        """
+        try:
+            response = self.table.scan(
+                FilterExpression="idempotency_key = :key",
+                ExpressionAttributeValues={":key": idempotency_key},
+                Limit=1,
+            )
+            items = response.get("Items", [])
+            if not items:
+                return None
+            return self._from_dynamodb_item(items[0])
+        except ClientError as e:
+            logger.error(f"Failed to scan for idempotency key {idempotency_key}: {e}")
+            raise
+
+    async def save_idempotency_key(
+        self,
+        idempotency_key: str,
+        job_id: str,
+        expires_at: datetime,
+    ) -> None:
+        """
+        Store an idempotency key with a reference to a job.
+
+        Args:
+            idempotency_key: The idempotency key
+            job_id: The associated job ID
+            expires_at: When this key should expire
+        """
+        try:
+            ttl = int(expires_at.timestamp())
+            self.table.update_item(
+                Key={"job_id": job_id},
+                UpdateExpression="SET idempotency_key = :key, idempotency_ttl = :ttl",
+                ExpressionAttributeValues={
+                    ":key": idempotency_key,
+                    ":ttl": ttl,
+                },
+                ConditionExpression="attribute_not_exists(idempotency_key)",
+            )
+            logger.info(f"Saved idempotency key {idempotency_key} for job {job_id}")
+        except ClientError as e:
+            # Check if this is a conditional check failed error
+            if (
+                e.response.get("Error", {}).get("Code")
+                == "ConditionalCheckFailedException"
+            ):
+                # Idempotency key already exists - this is expected for duplicate requests
+                logger.debug(
+                    f"Idempotency key {idempotency_key} already exists for another job"
+                )
+                # Don't raise - the original job with this key already exists
+            else:
+                # Other ClientError - re-raise
+                logger.error(f"Failed to save idempotency key {idempotency_key}: {e}")
+                raise
 
     async def health_check(self) -> bool:
         """
@@ -225,9 +415,12 @@ class DynamoDBJobRepository(JobRepository):
             "job_id": job.job_id,
             "user_id": job.user_id,
             "report_type": job.report_type,
+            "date_range": job.date_range,
+            "format": job.format,
             "status": job.status.value,
             "created_at": job.created_at.isoformat(),
             "updated_at": job.updated_at.isoformat(),
+            "version": job.version,
         }
         if job.result_url is not None:
             item["result_url"] = job.result_url
@@ -256,8 +449,11 @@ class DynamoDBJobRepository(JobRepository):
             job_id=item["job_id"],
             user_id=item["user_id"],
             report_type=item["report_type"],
+            date_range=item.get("date_range", "all"),
+            format=item.get("format", "pdf"),
             status=JobStatus(item.get("status", "PENDING")),
             created_at=created_at,
             updated_at=updated_at,
             result_url=item.get("result_url"),
+            version=item.get("version", 1),
         )

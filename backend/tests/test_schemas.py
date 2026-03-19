@@ -49,6 +49,23 @@ class TestJobSchemas:
         assert response.job_id == "test-123"
         assert response.status == JobStatusSchema.PENDING
 
+    def test_job_create_response_idempotent_field_default(self):
+        """Test that JobCreateResponse idempotent field defaults to False."""
+        response = JobCreateResponse(
+            job_id="test-123",
+            status=JobStatusSchema.PENDING,
+        )
+        assert response.idempotent is False
+
+    def test_job_create_response_with_idempotent_true(self):
+        """Test that JobCreateResponse can set idempotent to True."""
+        response = JobCreateResponse(
+            job_id="test-123",
+            status=JobStatusSchema.PENDING,
+            idempotent=True,
+        )
+        assert response.idempotent is True
+
     def test_job_list_response_structure(self):
         """Test that JobListResponse has correct structure."""
         response = JobListResponse(
@@ -134,6 +151,53 @@ class TestExceptions:
         assert "error" in result
         assert result["error"]["code"] == "TEST_ERROR"
         assert result["error"]["message"] == "Test error"
+
+
+class TestConflictException:
+    """Tests for ConflictException."""
+
+    def test_conflict_exception_creation(self):
+        """Test ConflictException creation."""
+        from backend.src.shared.exceptions import ConflictException
+
+        exc = ConflictException(resource="Job")
+        assert exc.status_code == 409
+        assert exc.error_code == "CONFLICT"
+        # Message is the default one since we don't include resource name
+        assert "modified" in exc.message.lower()
+
+    def test_conflict_exception_with_custom_message(self):
+        """Test ConflictException with custom message."""
+        from backend.src.shared.exceptions import ConflictException
+
+        exc = ConflictException(
+            resource="Job",
+            message="Custom conflict message",
+        )
+        assert exc.message == "Custom conflict message"
+
+    def test_conflict_exception_with_details(self):
+        """Test ConflictException with additional details."""
+        from backend.src.shared.exceptions import ConflictException
+
+        exc = ConflictException(
+            resource="Job",
+            details={"job_id": "test-123"},
+        )
+        assert exc.details["job_id"] == "test-123"
+        # Resource is added to details automatically
+        assert exc.details["resource"] == "Job"
+
+    def test_conflict_exception_to_dict(self):
+        """Test ConflictException.to_dict() method."""
+        from backend.src.shared.exceptions import ConflictException
+
+        exc = ConflictException(resource="Job", message="Version mismatch")
+        result = exc.to_dict()
+
+        assert "error" in result
+        assert result["error"]["code"] == "CONFLICT"
+        assert result["error"]["message"] == "Version mismatch"
 
 
 class TestHealthResponse:

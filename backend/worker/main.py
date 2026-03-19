@@ -12,15 +12,24 @@ from backend.worker.config import get_settings
 from backend.worker.processor import JobProcessor
 
 # Configure structured logging
+# Using stdlib logging as base to avoid structlog compatibility issues
+import logging as stdlib_logging
+
+stdlib_logging.basicConfig(
+    format="%(message)s",
+    level=stdlib_logging.INFO,
+)
+
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.add_log_level,
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
+    wrapper_class=structlog.BoundLogger,
+    cache_logger_on_first_use=False,
 )
 
 logger = structlog.get_logger()

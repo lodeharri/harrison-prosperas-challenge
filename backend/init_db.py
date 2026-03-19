@@ -44,7 +44,7 @@ def get_config() -> dict:
 
 def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
     """
-    Create the jobs table with GSI on user_id.
+    Create the jobs table with GSIs for user_id and idempotency_key lookups.
 
     Args:
         dynamodb: Boto3 DynamoDB client
@@ -58,11 +58,44 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
         try:
             response = dynamodb.describe_table(TableName=table_name)
             logger.info(f"Table '{table_name}' already exists")
+
+            # Check if idempotency GSI needs to be added
+            existing_gsis = response["Table"].get("GlobalSecondaryIndexes", [])
+            existing_gsi_names = [gsi["IndexName"] for gsi in existing_gsis]
+
+            if "idempotency_key-index" not in existing_gsi_names:
+                logger.info("Adding idempotency_key-index GSI to existing table...")
+                dynamodb.update_table(
+                    TableName=table_name,
+                    AttributeDefinitions=[
+                        {"AttributeName": "idempotency_key", "AttributeType": "S"},
+                    ],
+                    GlobalSecondaryIndexUpdates=[
+                        {
+                            "Create": {
+                                "IndexName": "idempotency_key-index",
+                                "KeySchema": [
+                                    {
+                                        "AttributeName": "idempotency_key",
+                                        "KeyType": "HASH",
+                                    },
+                                ],
+                                "Projection": {"ProjectionType": "KEYS_ONLY"},
+                                "ProvisionedThroughput": {
+                                    "ReadCapacityUnits": 5,
+                                    "WriteCapacityUnits": 5,
+                                },
+                            }
+                        },
+                    ],
+                )
+                logger.info("Added idempotency_key-index GSI")
+
             return True
         except dynamodb.exceptions.ResourceNotFoundException:
             pass
 
-        # Create table with GSI for user_id lookups
+        # Create table with GSIs for user_id and idempotency_key lookups
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
@@ -72,6 +105,7 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
                 {"AttributeName": "job_id", "AttributeType": "S"},
                 {"AttributeName": "user_id", "AttributeType": "S"},
                 {"AttributeName": "created_at", "AttributeType": "S"},
+                {"AttributeName": "idempotency_key", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -81,6 +115,17 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
                         {"AttributeName": "created_at", "KeyType": "RANGE"},
                     ],
                     "Projection": {"ProjectionType": "ALL"},
+                    "ProvisionedThroughput": {
+                        "ReadCapacityUnits": 5,
+                        "WriteCapacityUnits": 5,
+                    },
+                },
+                {
+                    "IndexName": "idempotency_key-index",
+                    "KeySchema": [
+                        {"AttributeName": "idempotency_key", "KeyType": "HASH"},
+                    ],
+                    "Projection": {"ProjectionType": "KEYS_ONLY"},
                     "ProvisionedThroughput": {
                         "ReadCapacityUnits": 5,
                         "WriteCapacityUnits": 5,
@@ -96,7 +141,10 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
         # Wait for table to be active
         waiter = dynamodb.get_waiter("table_exists")
         waiter.wait(TableName=table_name)
-        logger.info(f"Created table '{table_name}' with GSI 'user_id-created_at-index'")
+        logger.info(
+            f"Created table '{table_name}' with GSIs: "
+            "'user_id-created_at-index', 'idempotency_key-index'"
+        )
         return True
 
     except ClientError as e:

@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 
 from backend.src.domain.entities.job import Job
 from backend.src.domain.value_objects.job_status import JobStatus
-from backend.src.domain.exceptions.domain_exceptions import InvalidJobStateException
+from backend.src.domain.exceptions.domain_exceptions import (
+    InvalidJobStateException,
+    VersionConflictException,
+)
 
 
 class TestJobCreation:
@@ -35,6 +38,15 @@ class TestJobCreation:
         assert job.updated_at is not None
         assert isinstance(job.created_at, datetime)
         assert isinstance(job.updated_at, datetime)
+
+    def test_create_job_sets_version_to_one(self):
+        """Test that create() sets version to 1 for optimistic locking."""
+        job = Job.create(
+            job_id="test-123",
+            user_id="user-456",
+            report_type="sales_report",
+        )
+        assert job.version == 1
 
 
 class TestJobStatusTransitions:
@@ -154,6 +166,21 @@ class TestJobSerialization:
         assert data["status"] == "PENDING"
         assert "created_at" in data
         assert "updated_at" in data
+        assert data["version"] == 1
+
+    def test_to_dict_includes_all_fields(self):
+        """Test that to_dict includes date_range, format, and version."""
+        job = Job.create(
+            job_id="test-123",
+            user_id="user-456",
+            report_type="sales_report",
+            date_range="2024-01-01 to 2024-01-31",
+            format="csv",
+        )
+        data = job.to_dict()
+        assert data["date_range"] == "2024-01-01 to 2024-01-31"
+        assert data["format"] == "csv"
+        assert data["version"] == 1
 
     def test_from_dict(self):
         """Test creating job from dictionary."""
@@ -168,3 +195,72 @@ class TestJobSerialization:
         job = Job.from_dict(data)
         assert job.job_id == "test-123"
         assert job.status == JobStatus.PROCESSING
+
+    def test_from_dict_with_version(self):
+        """Test creating job from dictionary with version."""
+        data = {
+            "job_id": "test-123",
+            "user_id": "user-456",
+            "report_type": "sales_report",
+            "status": "PROCESSING",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "updated_at": "2024-01-01T00:01:00+00:00",
+            "version": 5,
+        }
+        job = Job.from_dict(data)
+        assert job.version == 5
+
+    def test_from_dict_defaults_version_to_one(self):
+        """Test that from_dict defaults version to 1 if not present."""
+        data = {
+            "job_id": "test-123",
+            "user_id": "user-456",
+            "report_type": "sales_report",
+            "status": "PENDING",
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "updated_at": "2024-01-01T00:00:00+00:00",
+        }
+        job = Job.from_dict(data)
+        assert job.version == 1
+
+
+class TestVersionConflictException:
+    """Tests for VersionConflictException."""
+
+    def test_version_conflict_exception_creation(self):
+        """Test creating a VersionConflictException."""
+        exc = VersionConflictException(
+            job_id="test-123",
+            expected_version=1,
+            actual_version=2,
+        )
+        assert exc.job_id == "test-123"
+        assert exc.expected_version == 1
+        assert exc.actual_version == 2
+        assert exc.code == "VERSION_CONFLICT"
+        assert "test-123" in exc.message
+        # Message includes both expected and actual versions
+        assert "Expected version 1, found 2" in exc.message
+
+    def test_version_conflict_exception_without_actual_version(self):
+        """Test creating a VersionConflictException without actual version."""
+        exc = VersionConflictException(
+            job_id="test-123",
+            expected_version=1,
+        )
+        assert exc.actual_version is None
+        # Message format depends on whether actual_version is provided
+        assert "Expected version 1" in exc.message
+
+    def test_version_conflict_exception_to_dict(self):
+        """Test VersionConflictException serialization."""
+        exc = VersionConflictException(
+            job_id="test-123",
+            expected_version=1,
+            actual_version=2,
+        )
+        data = exc.to_dict()
+        assert data["code"] == "VERSION_CONFLICT"
+        assert data["details"]["job_id"] == "test-123"
+        assert data["details"]["expected_version"] == 1
+        assert data["details"]["actual_version"] == 2

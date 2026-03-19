@@ -7,7 +7,8 @@ and HTTP responses back to the client.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
+from starlette.responses import Response
 
 from backend.src.adapters.primary.fastapi.routes.dependencies import (
     get_current_user,
@@ -44,11 +45,23 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     status_code=201,
     summary="Create a new report job",
     description="Creates a new report job, stores it in DynamoDB, and publishes to SQS queue.",
+    responses={
+        200: {
+            "description": "Job created (or existing job returned for idempotent request)",
+        },
+    },
 )
 async def create_job(
     job_create: JobCreate,
     current_user: Annotated[str, Depends(get_current_user)],
     create_job_use_case: Annotated[CreateJobUseCase, Depends(get_create_job_use_case)],
+    x_idempotency_key: Annotated[
+        str | None,
+        Header(
+            alias="X-Idempotency-Key",
+            description="Optional idempotency key for safe request retries",
+        ),
+    ] = None,
 ) -> JobCreateResponse:
     """
     Create a new report job.
@@ -57,17 +70,32 @@ async def create_job(
     - Stores job in DynamoDB with PENDING status
     - Publishes job message to SQS for async processing
     - Returns job_id and status
+
+    Idempotency:
+    - If X-Idempotency-Key header is provided and a job with that key exists,
+      returns the existing job instead of creating a new one
+    - The idempotent field in the response indicates if this was a cached response
     """
-    job = await create_job_use_case.execute(
+    result = await create_job_use_case.execute(
         user_id=current_user,
         report_type=job_create.report_type,
+        date_range=job_create.date_range,
+        format=job_create.format,
+        idempotency_key=x_idempotency_key,
     )
 
-    logger.info(f"Created job {job.job_id} for user {current_user}")
+    if result.idempotent:
+        logger.info(
+            f"Returned existing job {result.job.job_id} for idempotency key "
+            f"{x_idempotency_key} (user: {current_user})"
+        )
+    else:
+        logger.info(f"Created job {result.job.job_id} for user {current_user}")
 
     return JobCreateResponse(
-        job_id=job.job_id,
-        status=job.status,
+        job_id=result.job.job_id,
+        status=result.job.status,
+        idempotent=result.idempotent,
     )
 
 
@@ -140,6 +168,26 @@ async def get_job(
 
 # Authentication router for testing purposes
 auth_router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+@auth_router.options(
+    "/token",
+    summary="CORS preflight",
+    description="Handle CORS preflight requests for the token endpoint.",
+    include_in_schema=False,
+)
+async def options_token() -> Response:
+    """Handle CORS preflight requests."""
+    return Response(
+        content="",
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 
 @auth_router.post(

@@ -16,6 +16,7 @@ from backend.worker.backoff import exponential_backoff
 from backend.worker.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from backend.worker.config import Settings, get_settings
 from backend.worker.dynamodb_client import DynamoDBClient, get_dynamodb_client
+from backend.worker.http_client import HttpClient, get_http_client
 from backend.worker.models import (
     JobMessage,
     JobPriority,
@@ -27,15 +28,24 @@ from backend.worker.models import (
 from backend.worker.sqs_client import SQSClient, get_sqs_client
 
 # Configure structured logging
+# Using stdlib logging as base to avoid structlog compatibility issues
+import logging as stdlib_logging
+
+stdlib_logging.basicConfig(
+    format="%(message)s",
+    level=stdlib_logging.INFO,
+)
+
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.add_log_level,
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
+    wrapper_class=structlog.BoundLogger,
+    cache_logger_on_first_use=False,
 )
 
 logger = structlog.get_logger()
@@ -104,11 +114,13 @@ class JobProcessor:
         settings: Settings | None = None,
         sqs_client: SQSClient | None = None,
         dynamodb_client: DynamoDBClient | None = None,
+        http_client: HttpClient | None = None,
     ) -> None:
         """Initialize job processor."""
         self.settings = settings or get_settings()
         self.sqs = sqs_client or get_sqs_client()
         self.dynamodb = dynamodb_client or get_dynamodb_client()
+        self.http = http_client or get_http_client()
         self.running = False
         self.metrics = ProcessingMetrics()
 
@@ -170,6 +182,7 @@ class JobProcessor:
             duration = time.time() - start_time
 
             # Update status to COMPLETED
+            updated_at = datetime.now(timezone.utc).isoformat()
             await self.dynamodb.update_job_status(
                 job_id,
                 JobStatus.COMPLETED,
@@ -185,6 +198,16 @@ class JobProcessor:
                 report_type=job_message.report_type,
                 duration_seconds=duration,
                 result_url=result["result_url"],
+            )
+
+            # Notify API for WebSocket (non-blocking)
+            await self.http.notify_job_update(
+                user_id=job_message.user_id,
+                job_id=job_id,
+                status=JobStatus.COMPLETED.value,
+                result_url=result["result_url"],
+                updated_at=updated_at,
+                report_type=job_message.report_type,
             )
 
             # Delete message from the correct queue based on priority
@@ -305,6 +328,8 @@ class JobProcessor:
         """Handle a failed message by moving to DLQ or retrying."""
         attempt_count = self._get_attempt_count(message)
         job_id = job_message.job_id if job_message else "unknown"
+        user_id = job_message.user_id if job_message else "unknown"
+        report_type = job_message.report_type if job_message else "unknown"
 
         logger.warning(
             "job_failed",
@@ -316,7 +341,18 @@ class JobProcessor:
 
         # Update job status to FAILED
         try:
+            updated_at = datetime.now(timezone.utc).isoformat()
             await self.dynamodb.update_job_status(job_id, JobStatus.FAILED)
+
+            # Notify API for WebSocket (non-blocking) - only if we have user info
+            if job_message:
+                await self.http.notify_job_update(
+                    user_id=user_id,
+                    job_id=job_id,
+                    status=JobStatus.FAILED.value,
+                    updated_at=updated_at,
+                    report_type=report_type,
+                )
         except Exception as e:
             logger.error(f"Failed to update job status to FAILED: {e}")
 
@@ -448,6 +484,7 @@ class JobProcessor:
         self.running = False
         await self.sqs.close()
         await self.dynamodb.close()
+        await self.http.close()
 
     async def health_check(self) -> dict[str, Any]:
         """Check health of worker and dependencies."""

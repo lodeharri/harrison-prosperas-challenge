@@ -50,4 +50,5 @@ EXPOSE 8000
 
 # Default command - can be overridden in docker-compose
 # Import path: src.adapters.primary.fastapi.main means /app/backend/src/adapters/primary/fastapi/main.py
-CMD ["uvicorn", "src.adapters.primary.fastapi.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --reload is for development; use --workers in production
+CMD ["uvicorn", "src.adapters.primary.fastapi.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]

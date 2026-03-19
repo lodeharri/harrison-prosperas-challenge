@@ -5,13 +5,14 @@ pausing processing for report types that have exceeded a failure threshold.
 """
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, TypeVar
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 T = TypeVar("T")
 
