@@ -38,13 +38,38 @@
 * [ ]Implement concurrency mechanisms so the system can process at least 2 messages in parallel without one blocking the other.
 * [ ]Implement a robust strategy (like a Dead Letter Queue) to handle messages that fail repeatedly, ensuring they do not block the main queue.
 
-**4. Senior Bonus Challenges (Implement if possible)**
+**4. Senior Bonus Challenges**
 * [ ]**B1 - Priority Queues:** Implement high and standard priority channels based on report type, ensuring workers prioritize high-priority jobs.
 * [ ]**B2 - Circuit Breaker:** Implement a Circuit Breaker pattern in the worker to pause processing a specific report type if it fails N consecutive times.
 * [ ]**B4 - Exponential Back-off:** Add exponential back-off logic in the worker before retrying a failed message.
 * [ ]**B5 - Observability:** Add structured logging, business metrics, and a `GET /health` endpoint reporting the status of dependencies.
 * [ ]**B6 - Advanced Testing:** Achieve >= 70% backend code coverage using `pytest`, including unit tests for the worker, integration tests for the `POST /jobs` endpoint, and at least one test simulating a processing failure.
 
+**5. Core Setup & Technologies**
+* [cite_start]You must build the application using React 18+. 
+* You are allowed to initialize the project using Vite+React, or CRA.
+* Structure the application logically. It is recommended to organize the source code into `components/` for the UI, `hooks/` for custom hooks, and `services/` for API calls.
+* [cite_start]Manage environment variables correctly, ensuring a `.env.example` file is used and no secrets are hardcoded.
+
+**6. Report Request Form**
+* [cite_start]Build a form that allows the user to request a report.
+* [cite_start]The form must contain the following specific fields: `report_type`, `date_range`, and `format`.
+* [cite_start]Upon submission, the frontend must handle the immediate response containing the job identifier and initial state, ensuring the user is not blocked while the report is being processed.
+
+**7. Job List & Visual Feedback**
+* [cite_start]Build a list view to display the jobs.
+* [cite_start]You must implement colored badges to visually represent the current state of each job: `PENDING`, `PROCESSING`, `COMPLETED`, or `FAILED`.
+* Implement proper error handling that provides clear visual feedback to the user. [cite_start]Using the browser's native `alert()` function is explicitly forbidden.
+
+**8. Automatic State Updates (Core)**
+* [cite_start]The job list must reflect state changes automatically.
+* [cite_start]The user must never have to manually reload the page to see the updated status of their reports.
+
+**9. Responsive Design**
+* Ensure the entire application features a responsive design. [cite_start]It must look and function perfectly on both mobile devices and desktop screens.
+
+**10. Senior Bonus Challenge**
+* **B3 — Real-time notifications:** Replace traditional frontend polling with a push strategy, such as WebSockets or another similar mechanism. [cite_start]Configure the application so that the server proactively notifies the frontend whenever a job's status changes.
 
 ## Project Status
 - Current Milestone: Scaffolding
