@@ -156,16 +156,26 @@ class DynamoDBJobRepository(JobRepository):
         try:
             page_size = max(page_size, 20)  # Enforce minimum
 
-            # Scan with filter for user_id
-            response = self.jobs_table.scan(
-                FilterExpression="user_id = :user_id",
+            # Query using GSI for user_id, sorted by created_at descending
+            response = self.jobs_table.query(
+                IndexName="user_id-created_at-index",
+                KeyConditionExpression="user_id = :user_id",
                 ExpressionAttributeValues={":user_id": user_id},
+                ScanIndexForward=False,  # descending order
             )
 
             items = response.get("Items", [])
 
-            # Sort by created_at descending
-            items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            # If there are more pages, collect all items
+            while "LastEvaluatedKey" in response:
+                response = self.jobs_table.query(
+                    IndexName="user_id-created_at-index",
+                    KeyConditionExpression="user_id = :user_id",
+                    ExpressionAttributeValues={":user_id": user_id},
+                    ScanIndexForward=False,
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                )
+                items.extend(response.get("Items", []))
 
             total = len(items)
 
