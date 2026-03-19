@@ -12,7 +12,7 @@
 
 ```
 harrison-prosperas-challenge/
-├── docker-compose.yml        # Orchestrates all services
+├── local/docker-compose.yml   # Orchestrates all services (local config)
 ├── AGENTS.md                 # This file
 ├── PRD.md                    # Project requirements
 ├── backend/                  # FastAPI REST API + Worker
@@ -85,6 +85,11 @@ harrison-prosperas-challenge/
 |-------------|--------|
 | Local (Docker) | ✅ Ready |
 | AWS Production | ⏳ Pending |
+
+---
+
+## Project Status
+Docker Compose environment ready with LocalStack and improved configuration loading for backend and worker services.
 
 ---
 

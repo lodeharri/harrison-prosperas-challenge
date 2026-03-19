@@ -34,7 +34,7 @@ Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB (
 ## 🚀 Quick Start
 
 1. `cp .env.example .env`
-2. `docker compose up -d`
+2. `docker compose -f local/docker-compose.yml up -d`
 3. `docker exec harrison-prosperas-localstack /bin/bash /etc/localstack/init/ready.d/init-aws.sh`
 4. `curl http://localhost:8000/health`
 
@@ -86,12 +86,12 @@ PENDING → PROCESSING → COMPLETED
 ## 🔧 Comandos Útiles
 
 ```bash
-docker compose up -d          # Iniciar
-docker compose logs -f         # Ver logs
-docker compose logs app        # Logs API
-docker compose logs worker     # Logs worker
-docker compose ps              # Estado servicios
-docker compose down            # Detener
+docker compose -f local/docker-compose.yml up -d          # Iniciar
+docker compose -f local/docker-compose.yml logs -f         # Ver logs
+docker compose -f local/docker-compose.yml logs app        # Logs API
+docker compose -f local/docker-compose.yml logs worker     # Logs worker
+docker compose -f local/docker-compose.yml ps              # Estado servicios
+docker compose -f local/docker-compose.yml down            # Detener
 ```
 
 ## 📁 Estructura

@@ -11,7 +11,7 @@ from typing import Any
 
 import structlog
 
-from backend.src.shared.observability import create_cw_metrics_safe
+from backend.worker.observability import create_cw_metrics_safe
 from backend.worker.backoff import exponential_backoff
 from backend.worker.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from backend.worker.config import Settings, get_settings

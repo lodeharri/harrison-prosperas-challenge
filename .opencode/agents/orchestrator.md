@@ -22,6 +22,7 @@ permission:
     "nc *": deny
     "telnet *": deny
     "docker *": deny
+    "git *": deny
     "aws *": deny
     "pytest *": deny
     "npm test *": deny

@@ -59,7 +59,7 @@ If you encounter a failure that resides within the application logic (Python/Fas
     - Include specific AWS CLI commands for manual verification.
 
 ## Operational Protocol
-1. **Scaffold**: Create the `/infra` directory if not exist.
+1. **Scaffold**: Create the `/infra`, `/local` directory if not exist.
 2. **Persistence**: Initialize `infra/AGENTS.md` with the current environment specifications before any code implementation.
 3. **Verify**: Use `bash` to validate Docker configurations and document the "green" state in the local manifest.
 
