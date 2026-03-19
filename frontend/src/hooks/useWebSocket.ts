@@ -14,17 +14,33 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void): U
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const userIdRef = useRef<string | null>(null);
+  
+  // Store onMessage in a ref to avoid recreating connect on every render
+  const onMessageRef = useRef(onMessage);
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   const connect = useCallback((userId: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    
+    // Check if token exists
+    const token = apiService.getToken();
+    if (!token) {
+      console.warn('useWebSocket: No token available, skipping connection');
       return;
     }
 
     const wsUrl = apiService.getWebSocketUrl(userId);
+    console.log('useWebSocket: Connecting to', wsUrl);
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected successfully');
       setIsConnected(true);
       userIdRef.current = userId;
     };
@@ -33,14 +49,14 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void): U
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
         setLastMessage(message);
-        onMessage?.(message);
+        onMessageRef.current?.(message);
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);
       }
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected', { code: event.code, reason: event.reason });
       setIsConnected(false);
       wsRef.current = null;
     };
@@ -50,7 +66,7 @@ export function useWebSocket(onMessage?: (message: WebSocketMessage) => void): U
     };
 
     wsRef.current = ws;
-  }, [onMessage]);
+  }, []);  // Empty deps - uses refs instead
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {

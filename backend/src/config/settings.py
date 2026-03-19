@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # DynamoDB
     dynamodb_table_jobs: str = "jobs"
+    dynamodb_table_idempotency: str = "idempotency_keys"
 
     # SQS
     sqs_queue_url: str = "http://localhost:4566/000000000000/report-jobs-queue"

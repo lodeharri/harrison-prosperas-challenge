@@ -2,10 +2,14 @@
 
 This adapter implements the JobRepository port using AWS DynamoDB.
 It handles all the translation between domain entities and DynamoDB items.
+
+Uses two separate tables:
+- jobs: Stores job entities
+- idempotency_keys: Stores idempotency key references with TTL
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import boto3
@@ -22,9 +26,6 @@ from backend.src.domain.value_objects.job_status import JobStatus
 
 logger = logging.getLogger(__name__)
 
-# Idempotency key TTL (24 hours)
-IDEMPOTENCY_KEY_TTL_HOURS = 24
-
 
 class DynamoDBJobRepository(JobRepository):
     """
@@ -34,6 +35,7 @@ class DynamoDBJobRepository(JobRepository):
     - Converting domain entities to DynamoDB items
     - Converting DynamoDB items back to domain entities
     - Handling AWS-specific error translation
+    - Managing idempotency keys in a separate table with TTL
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -45,7 +47,8 @@ class DynamoDBJobRepository(JobRepository):
         """
         self._settings = settings or get_settings()
         self._client: Any = None
-        self._table: Any = None
+        self._jobs_table: Any = None
+        self._idempotency_table: Any = None
 
     @property
     def client(self) -> Any:
@@ -61,9 +64,9 @@ class DynamoDBJobRepository(JobRepository):
         return self._client
 
     @property
-    def table(self) -> Any:
-        """Get DynamoDB table resource with lazy initialization."""
-        if self._table is None:
+    def jobs_table(self) -> Any:
+        """Get DynamoDB jobs table resource with lazy initialization."""
+        if self._jobs_table is None:
             resource = boto3.resource(
                 "dynamodb",
                 endpoint_url=self._settings.aws_endpoint_url,
@@ -71,8 +74,24 @@ class DynamoDBJobRepository(JobRepository):
                 aws_access_key_id=self._settings.aws_access_key_id,
                 aws_secret_access_key=self._settings.aws_secret_access_key,
             )
-            self._table = resource.Table(self._settings.dynamodb_table_jobs)
-        return self._table
+            self._jobs_table = resource.Table(self._settings.dynamodb_table_jobs)
+        return self._jobs_table
+
+    @property
+    def idempotency_table(self) -> Any:
+        """Get DynamoDB idempotency keys table resource with lazy initialization."""
+        if self._idempotency_table is None:
+            resource = boto3.resource(
+                "dynamodb",
+                endpoint_url=self._settings.aws_endpoint_url,
+                region_name=self._settings.aws_region,
+                aws_access_key_id=self._settings.aws_access_key_id,
+                aws_secret_access_key=self._settings.aws_secret_access_key,
+            )
+            self._idempotency_table = resource.Table(
+                self._settings.dynamodb_table_idempotency
+            )
+        return self._idempotency_table
 
     async def create(self, job: Job) -> Job:
         """
@@ -86,7 +105,7 @@ class DynamoDBJobRepository(JobRepository):
         """
         try:
             item = self._to_dynamodb_item(job)
-            self.table.put_item(Item=item, ReturnValues="ALL_OLD")
+            self.jobs_table.put_item(Item=item, ReturnValues="ALL_OLD")
             logger.info(f"Created job: {job.job_id}")
             return job
         except ClientError as e:
@@ -107,7 +126,7 @@ class DynamoDBJobRepository(JobRepository):
             JobNotFoundException: If job doesn't exist
         """
         try:
-            response = self.table.get_item(Key={"job_id": job_id})
+            response = self.jobs_table.get_item(Key={"job_id": job_id})
             if "Item" not in response:
                 raise JobNotFoundException(job_id)
             return self._from_dynamodb_item(response["Item"])
@@ -138,7 +157,7 @@ class DynamoDBJobRepository(JobRepository):
             page_size = max(page_size, 20)  # Enforce minimum
 
             # Scan with filter for user_id
-            response = self.table.scan(
+            response = self.jobs_table.scan(
                 FilterExpression="user_id = :user_id",
                 ExpressionAttributeValues={":user_id": user_id},
             )
@@ -160,52 +179,6 @@ class DynamoDBJobRepository(JobRepository):
 
         except ClientError as e:
             logger.error(f"Failed to list jobs for user {user_id}: {e}")
-            raise
-
-    async def update_status(
-        self,
-        job_id: str,
-        status: JobStatus,
-        result_url: str | None = None,
-    ) -> Job:
-        """
-        Update a job's status.
-
-        Args:
-            job_id: Job identifier
-            status: New status
-            result_url: Optional result URL
-
-        Returns:
-            The updated job
-        """
-        try:
-            update_expression = "SET #status = :status, updated_at = :updated_at, #version = #version + :inc"
-            expression_values: dict[str, Any] = {
-                ":status": status.value,
-                ":updated_at": datetime.now(timezone.utc).isoformat(),
-                ":inc": 1,
-            }
-
-            if result_url is not None:
-                update_expression += ", result_url = :result_url"
-                expression_values[":result_url"] = result_url
-
-            response = self.table.update_item(
-                Key={"job_id": job_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeNames={
-                    "#status": "status",
-                    "#version": "version",
-                },
-                ExpressionAttributeValues=expression_values,
-                ReturnValues="ALL_NEW",
-            )
-            logger.info(f"Updated job {job_id} status to {status.value}")
-            return self._from_dynamodb_item(response["Attributes"])
-
-        except ClientError as e:
-            logger.error(f"Failed to update job {job_id}: {e}")
             raise
 
     async def update_status_with_version(
@@ -246,7 +219,7 @@ class DynamoDBJobRepository(JobRepository):
                 update_expression += ", result_url = :result_url"
                 expression_values[":result_url"] = result_url
 
-            response = self.table.update_item(
+            response = self.jobs_table.update_item(
                 Key={"job_id": job_id},
                 UpdateExpression=update_expression,
                 ConditionExpression="#version = :expected_version",
@@ -293,8 +266,8 @@ class DynamoDBJobRepository(JobRepository):
         """
         Retrieve a job by its idempotency key.
 
-        Uses a separate table or GSI to look up the idempotency key.
-        In this implementation, we use a prefixed pattern in the jobs table.
+        Uses a separate idempotency_keys table to look up the key,
+        then fetches the associated job.
 
         Args:
             idempotency_key: The idempotency key to look up
@@ -303,47 +276,34 @@ class DynamoDBJobRepository(JobRepository):
             The job entity if found, None otherwise
         """
         try:
-            # Query using GSI on idempotency_key
-            response = self.table.query(
-                IndexName="idempotency_key-index",
-                KeyConditionExpression="idempotency_key = :key",
-                ExpressionAttributeValues={
-                    ":key": idempotency_key,
-                },
-                Limit=1,
+            # Query the idempotency keys table
+            response = self.idempotency_table.get_item(
+                Key={"idempotency_key": idempotency_key}
             )
-            items = response.get("Items", [])
-            if not items:
+            item = response.get("Item")
+
+            if item is None:
+                logger.debug(f"No job found for idempotency key: {idempotency_key}")
                 return None
-            return self._from_dynamodb_item(items[0])
+
+            job_id = item.get("job_id")
+            if not job_id:
+                logger.warning(
+                    f"Idempotency key exists but has no job_id: {idempotency_key}"
+                )
+                return None
+
+            # Fetch the actual job
+            try:
+                return await self.get_by_id(job_id)
+            except JobNotFoundException:
+                logger.warning(
+                    f"Job {job_id} for idempotency key {idempotency_key} no longer exists"
+                )
+                return None
 
         except ClientError as e:
-            # If the index doesn't exist, fall back to scan (not recommended for production)
-            if e.response["Error"]["Code"] == "ResourceNotFoundException":
-                logger.warning(f"idempotency_key-index not found, falling back to scan")
-                return await self._scan_by_idempotency_key(idempotency_key)
             logger.error(f"Failed to get job by idempotency key {idempotency_key}: {e}")
-            raise
-
-    async def _scan_by_idempotency_key(self, idempotency_key: str) -> Job | None:
-        """
-        Fallback scan for idempotency key lookup.
-
-        This is less efficient than using an index but works when
-        the GSI doesn't exist.
-        """
-        try:
-            response = self.table.scan(
-                FilterExpression="idempotency_key = :key",
-                ExpressionAttributeValues={":key": idempotency_key},
-                Limit=1,
-            )
-            items = response.get("Items", [])
-            if not items:
-                return None
-            return self._from_dynamodb_item(items[0])
-        except ClientError as e:
-            logger.error(f"Failed to scan for idempotency key {idempotency_key}: {e}")
             raise
 
     async def save_idempotency_key(
@@ -355,20 +315,25 @@ class DynamoDBJobRepository(JobRepository):
         """
         Store an idempotency key with a reference to a job.
 
+        Uses a separate idempotency_keys table with TTL enabled,
+        so the key reference expires automatically without affecting
+        the actual job data.
+
         Args:
             idempotency_key: The idempotency key
             job_id: The associated job ID
-            expires_at: When this key should expire
+            expires_at: When this key should expire (used for TTL)
         """
         try:
             ttl = int(expires_at.timestamp())
-            self.table.update_item(
-                Key={"job_id": job_id},
-                UpdateExpression="SET idempotency_key = :key, idempotency_ttl = :ttl",
-                ExpressionAttributeValues={
-                    ":key": idempotency_key,
-                    ":ttl": ttl,
-                },
+            item = {
+                "idempotency_key": idempotency_key,
+                "job_id": job_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": ttl,  # DynamoDB TTL attribute
+            }
+            self.idempotency_table.put_item(
+                Item=item,
                 ConditionExpression="attribute_not_exists(idempotency_key)",
             )
             logger.info(f"Saved idempotency key {idempotency_key} for job {job_id}")
@@ -397,6 +362,9 @@ class DynamoDBJobRepository(JobRepository):
         """
         try:
             self.client.describe_table(TableName=self._settings.dynamodb_table_jobs)
+            self.client.describe_table(
+                TableName=self._settings.dynamodb_table_idempotency
+            )
             return True
         except ClientError:
             return False

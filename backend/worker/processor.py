@@ -158,8 +158,17 @@ class JobProcessor:
                 priority=job_message.priority.value,
             )
 
-            # Update status to PROCESSING
-            await self.dynamodb.update_job_status(job_id, JobStatus.PROCESSING)
+            # Update status to PROCESSING (with optimistic locking)
+            current_job = await self.dynamodb.get_job(job_id)
+            if not current_job:
+                raise NonRetryableError(f"Job {job_id} not found", job_id=job_id)
+            current_version = current_job.get("version", 1)
+
+            await self.dynamodb.update_job_status(
+                job_id,
+                JobStatus.PROCESSING,
+                expected_version=current_version,
+            )
 
             # Check circuit breaker
             is_open, retry_after = await self.circuit_breaker.is_open(
@@ -181,12 +190,17 @@ class JobProcessor:
             )
             duration = time.time() - start_time
 
-            # Update status to COMPLETED
+            # Update status to COMPLETED (with optimistic locking)
             updated_at = datetime.now(timezone.utc).isoformat()
+            # Re-fetch job to get current version
+            current_job = await self.dynamodb.get_job(job_id)
+            current_version = current_job.get("version", 1) if current_job else 1
+
             await self.dynamodb.update_job_status(
                 job_id,
                 JobStatus.COMPLETED,
                 result_url=result["result_url"],
+                expected_version=current_version,
             )
 
             # Record metrics
@@ -339,10 +353,16 @@ class JobProcessor:
             error=str(error),
         )
 
-        # Update job status to FAILED
+        # Update job status to FAILED (with optimistic locking)
         try:
             updated_at = datetime.now(timezone.utc).isoformat()
-            await self.dynamodb.update_job_status(job_id, JobStatus.FAILED)
+            current_job = await self.dynamodb.get_job(job_id)
+            current_version = current_job.get("version", 1) if current_job else 1
+            await self.dynamodb.update_job_status(
+                job_id,
+                JobStatus.FAILED,
+                expected_version=current_version,
+            )
 
             # Notify API for WebSocket (non-blocking) - only if we have user info
             if job_message:

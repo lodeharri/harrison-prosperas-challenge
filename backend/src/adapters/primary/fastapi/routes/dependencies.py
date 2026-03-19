@@ -6,9 +6,8 @@ use cases and services into route handlers.
 
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 
 from backend.src.adapters.secondary.dynamodb.job_repository import DynamoDBJobRepository
 from backend.src.adapters.secondary.sqs.job_queue import SQSJobQueue

@@ -98,7 +98,8 @@ class ApiService {
   }
 
   getWebSocketUrl(userId: string): string {
-    return `${WS_URL}/ws/jobs/${userId}?token=${this.token}`;
+    const token = this.token || '';
+    return `${WS_URL}/ws/jobs?user_id=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`;
   }
 }
 

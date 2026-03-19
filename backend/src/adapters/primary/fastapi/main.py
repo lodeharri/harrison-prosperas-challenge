@@ -9,12 +9,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, FastAPI, Request, status
+from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.responses import Response
-from starlette.websockets import WebSocket
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.websockets import WebSocket as StarletteWebSocket
 
 from backend.src.adapters.primary.fastapi.routes import (
     auth_router,
@@ -39,6 +40,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "*",  # Allow all for WebSocket
 ]
 
 
@@ -54,6 +56,22 @@ logger = logging.getLogger(__name__)
 
 # Health check router
 router = APIRouter()
+
+
+class WebSocketCORSMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to allow WebSocket connections from any origin.
+    
+    WebSocket connections use an HTTP upgrade mechanism. This middleware
+    simply passes through WebSocket upgrade requests without modification,
+    allowing the WebSocket endpoint to handle the connection.
+    """
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        # For WebSocket connections, just pass through without adding headers
+        # The CORSMiddleware already handles CORS headers for regular HTTP requests
+        # WebSocket uses a different mechanism (Sec-WebSocket-Protocol)
+        return await call_next(request)
 
 
 def create_app(settings: "Settings | None" = None) -> FastAPI:
@@ -79,22 +97,18 @@ def create_app(settings: "Settings | None" = None) -> FastAPI:
 
     # =========================================================================
     # CORS Configuration - Use FastAPI's CORSMiddleware
-    # Note: This middleware runs at the ASGI level, before route matching
+    # Note: Allow all origins for development, restrict in production
     # =========================================================================
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:8080",
-            "http://127.0.0.1:8080",
-        ],
+        allow_origins=["*"],  # Allow all origins for WebSocket compatibility
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add WebSocket CORS middleware
+    app.add_middleware(WebSocketCORSMiddleware)
 
     # Include routers
     app.include_router(jobs.router)

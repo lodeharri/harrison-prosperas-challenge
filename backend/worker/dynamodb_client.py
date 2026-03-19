@@ -65,17 +65,25 @@ class DynamoDBClient:
         job_id: str,
         status: JobStatus,
         result_url: str | None = None,
+        expected_version: int | None = None,
     ) -> dict[str, Any] | None:
         """
-        Update a job's status in DynamoDB.
+        Update a job's status in DynamoDB with optimistic locking.
+
+        If expected_version is provided, uses conditional writes to prevent
+        race conditions. The version is automatically incremented on success.
 
         Args:
             job_id: The unique job identifier
             status: New status value
             result_url: Optional result URL (for completed jobs)
+            expected_version: Expected current version (for optimistic locking)
 
         Returns:
             Updated job data or None if job not found
+
+        Raises:
+            ClientError: If DynamoDB operation fails or version conflict occurs
         """
         session = await self._get_session()
         updated_at = datetime.now(timezone.utc).isoformat()
@@ -91,6 +99,12 @@ class DynamoDBClient:
             update_expression += ", result_url = :result_url"
             expression_values[":result_url"] = {"S": result_url}
 
+        # Add version increment and condition if expected_version is provided
+        if expected_version is not None:
+            update_expression += ", #version = :new_version"
+            expression_values[":expected_version"] = {"N": str(expected_version)}
+            expression_values[":new_version"] = {"N": str(expected_version + 1)}
+
         try:
             async with session.create_client(
                 "dynamodb",
@@ -99,18 +113,42 @@ class DynamoDBClient:
                 aws_access_key_id=self.settings.aws_access_key_id,
                 aws_secret_access_key=self.settings.aws_secret_access_key,
             ) as client:
+                # Build condition expression if using optimistic locking
+                condition_expression = None
+                if expected_version is not None:
+                    condition_expression = "#version = :expected_version"
+
                 response = await client.update_item(
                     TableName=self.settings.dynamodb_table_jobs,
                     Key={"job_id": {"S": job_id}},
                     UpdateExpression=update_expression,
-                    ExpressionAttributeNames={"#status": "status"},
+                    ExpressionAttributeNames={
+                        "#status": "status",
+                        "#version": "version",
+                    },
                     ExpressionAttributeValues=expression_values,
+                    ConditionExpression=condition_expression,
                     ReturnValues="ALL_NEW",
                 )
-                logger.info(f"Updated job {job_id} status to {status.value}")
+                logger.info(
+                    f"Updated job {job_id} status to {status.value}"
+                    + (
+                        f" (version {expected_version} -> {expected_version + 1})"
+                        if expected_version
+                        else ""
+                    )
+                )
                 return self._unmarshall_item(response.get("Attributes", {}))
 
         except ClientError as e:
+            if (
+                e.response.get("Error", {}).get("Code")
+                == "ConditionalCheckFailedException"
+            ):
+                logger.warning(
+                    f"Version conflict for job {job_id}: "
+                    f"expected version {expected_version}"
+                )
             logger.error(f"Failed to update job {job_id}: {e}")
             raise
 

@@ -37,6 +37,9 @@ def get_config() -> dict:
         "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID", "test"),
         "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", "test"),
         "table_name": os.getenv("DYNAMODB_TABLE_JOBS", "jobs"),
+        "idempotency_table_name": os.getenv(
+            "DYNAMODB_TABLE_IDEMPOTENCY", "idempotency_keys"
+        ),
         "queue_name": os.getenv("SQS_QUEUE_NAME", "report-jobs-queue"),
         "dlq_name": os.getenv("SQS_DLQ_NAME", "report-jobs-dlq"),
     }
@@ -44,7 +47,7 @@ def get_config() -> dict:
 
 def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
     """
-    Create the jobs table with GSIs for user_id and idempotency_key lookups.
+    Create the jobs table with GSI for user_id lookups.
 
     Args:
         dynamodb: Boto3 DynamoDB client
@@ -58,44 +61,12 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
         try:
             response = dynamodb.describe_table(TableName=table_name)
             logger.info(f"Table '{table_name}' already exists")
-
-            # Check if idempotency GSI needs to be added
-            existing_gsis = response["Table"].get("GlobalSecondaryIndexes", [])
-            existing_gsi_names = [gsi["IndexName"] for gsi in existing_gsis]
-
-            if "idempotency_key-index" not in existing_gsi_names:
-                logger.info("Adding idempotency_key-index GSI to existing table...")
-                dynamodb.update_table(
-                    TableName=table_name,
-                    AttributeDefinitions=[
-                        {"AttributeName": "idempotency_key", "AttributeType": "S"},
-                    ],
-                    GlobalSecondaryIndexUpdates=[
-                        {
-                            "Create": {
-                                "IndexName": "idempotency_key-index",
-                                "KeySchema": [
-                                    {
-                                        "AttributeName": "idempotency_key",
-                                        "KeyType": "HASH",
-                                    },
-                                ],
-                                "Projection": {"ProjectionType": "KEYS_ONLY"},
-                                "ProvisionedThroughput": {
-                                    "ReadCapacityUnits": 5,
-                                    "WriteCapacityUnits": 5,
-                                },
-                            }
-                        },
-                    ],
-                )
-                logger.info("Added idempotency_key-index GSI")
-
             return True
         except dynamodb.exceptions.ResourceNotFoundException:
             pass
 
-        # Create table with GSIs for user_id and idempotency_key lookups
+        # Create table with GSI for user_id lookups
+        # Note: Idempotency keys are now stored in a separate table
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
@@ -105,7 +76,6 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
                 {"AttributeName": "job_id", "AttributeType": "S"},
                 {"AttributeName": "user_id", "AttributeType": "S"},
                 {"AttributeName": "created_at", "AttributeType": "S"},
-                {"AttributeName": "idempotency_key", "AttributeType": "S"},
             ],
             GlobalSecondaryIndexes=[
                 {
@@ -115,17 +85,6 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
                         {"AttributeName": "created_at", "KeyType": "RANGE"},
                     ],
                     "Projection": {"ProjectionType": "ALL"},
-                    "ProvisionedThroughput": {
-                        "ReadCapacityUnits": 5,
-                        "WriteCapacityUnits": 5,
-                    },
-                },
-                {
-                    "IndexName": "idempotency_key-index",
-                    "KeySchema": [
-                        {"AttributeName": "idempotency_key", "KeyType": "HASH"},
-                    ],
-                    "Projection": {"ProjectionType": "KEYS_ONLY"},
                     "ProvisionedThroughput": {
                         "ReadCapacityUnits": 5,
                         "WriteCapacityUnits": 5,
@@ -142,13 +101,93 @@ def create_dynamodb_table(dynamodb: Any, table_name: str) -> bool:
         waiter = dynamodb.get_waiter("table_exists")
         waiter.wait(TableName=table_name)
         logger.info(
-            f"Created table '{table_name}' with GSIs: "
-            "'user_id-created_at-index', 'idempotency_key-index'"
+            f"Created table '{table_name}' with GSI: 'user_id-created_at-index'"
         )
         return True
 
     except ClientError as e:
         logger.error(f"Failed to create table '{table_name}': {e}")
+        return False
+
+
+def create_idempotency_table(dynamodb: Any, table_name: str) -> bool:
+    """
+    Create the idempotency_keys table with TTL support.
+
+    This table stores idempotency keys separately from jobs to ensure
+    that TTL expiration only removes the key reference, not the entire job.
+
+    Table Design:
+    - Primary Key: idempotency_key (String) - the key provided by the client
+    - Attributes:
+        - job_id: Reference to the associated job
+        - created_at: Timestamp when the key was created
+    - TTL: expires_at attribute for automatic cleanup
+
+    Args:
+        dynamodb: Boto3 DynamoDB client
+        table_name: Name for the idempotency keys table
+
+    Returns:
+        True if table was created or already exists
+    """
+    try:
+        # Check if table already exists
+        try:
+            response = dynamodb.describe_table(TableName=table_name)
+            logger.info(f"Idempotency table '{table_name}' already exists")
+
+            # Check if TTL attribute needs to be enabled
+            ttl_description = response["Table"].get("TimeToLiveDescription", {})
+            if not ttl_description.get("AttributeName"):
+                logger.info("Enabling TTL on idempotency table...")
+                dynamodb.update_time_to_live(
+                    TableName=table_name,
+                    TimeToLiveSpecification={
+                        "Enabled": True,
+                        "AttributeName": "expires_at",
+                    },
+                )
+                logger.info("Enabled TTL on idempotency table")
+
+            return True
+        except dynamodb.exceptions.ResourceNotFoundException:
+            pass
+
+        # Create the idempotency keys table
+        table = dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[
+                {"AttributeName": "idempotency_key", "KeyType": "HASH"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "idempotency_key", "AttributeType": "S"},
+            ],
+            ProvisionedThroughput={
+                "ReadCapacityUnits": 5,
+                "WriteCapacityUnits": 5,
+            },
+        )
+
+        # Wait for table to be active
+        waiter = dynamodb.get_waiter("table_exists")
+        waiter.wait(TableName=table_name)
+        logger.info(f"Created idempotency table '{table_name}'")
+
+        # Enable TTL on the table
+        dynamodb.update_time_to_live(
+            TableName=table_name,
+            TimeToLiveSpecification={
+                "Enabled": True,
+                "AttributeName": "expires_at",
+            },
+        )
+        logger.info(f"Enabled TTL on idempotency table '{table_name}'")
+
+        return True
+
+    except ClientError as e:
+        logger.error(f"Failed to create idempotency table '{table_name}': {e}")
         return False
 
 
@@ -244,10 +283,16 @@ def main() -> int:
         aws_secret_access_key=config["aws_secret_access_key"],
     )
 
-    # Create DynamoDB table
-    logger.info("Creating DynamoDB table...")
+    # Create DynamoDB jobs table
+    logger.info("Creating DynamoDB jobs table...")
     if not create_dynamodb_table(dynamodb, config["table_name"]):
-        logger.error("Failed to create DynamoDB table")
+        logger.error("Failed to create DynamoDB jobs table")
+        return 1
+
+    # Create DynamoDB idempotency keys table
+    logger.info("Creating DynamoDB idempotency keys table...")
+    if not create_idempotency_table(dynamodb, config["idempotency_table_name"]):
+        logger.error("Failed to create DynamoDB idempotency table")
         return 1
 
     # Create SQS queues
@@ -265,6 +310,7 @@ def main() -> int:
         print(f"\nExport these environment variables:")
         print(f"export SQS_QUEUE_URL={queue_url}")
         print(f"export SQS_DLQ_URL={dlq_url}")
+        print(f"export DYNAMODB_TABLE_IDEMPOTENCY={config['idempotency_table_name']}")
 
     except Exception as e:
         logger.error(f"Failed to create SQS queues: {e}")

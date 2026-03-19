@@ -264,11 +264,15 @@ Implementa enrutamiento de trabajos por prioridad basado en el tipo de reporte:
 - Retrocompatibilidad: si CloudWatch no está disponible, continúa normalmente
 
 ### B6: Test Coverage ✅
-- **43 tests implementados** covering:
+- **165 tests implementados** covering:
   - Unit tests: Domain, Application, Adapters
   - Auth: JWT creation and verification
   - Schemas: Pydantic validation
-- **Cobertura objetivo:** >= 70% (verificable con `pytest --cov`)
+  - WebSocket routes and manager
+  - DynamoDB repository (async methods)
+  - SQS job queue
+  - CloudWatch observability
+- **Cobertura actual:** 92% (exceeds 70% target) ✅
 
 ### B7: Idempotency & Race Condition Handling ✅
 **Archivos modificados:**

@@ -71,25 +71,6 @@ class JobRepository(Protocol):
         """
         ...
 
-    async def update_status(
-        self,
-        job_id: str,
-        status: JobStatus,
-        result_url: str | None = None,
-    ) -> Job:
-        """
-        Update a job's status.
-
-        Args:
-            job_id: Job identifier
-            status: New status
-            result_url: Optional result URL (for completed jobs)
-
-        Returns:
-            The updated job
-        """
-        ...
-
     async def update_status_with_version(
         self,
         job_id: str,
