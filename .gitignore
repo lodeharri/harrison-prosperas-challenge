@@ -310,3 +310,12 @@ storybook-static/
 .nuxt-vuetify/
 .nuxt-bootstrap-vue/
 .nuxt-primevue/
+
+# Archivos de resumen y documentación temporal
+*_SUMMARY.md
+*_FROM_SCRATCH.md
+*-summary.md
+*-scratch.md
+cleanup-*.sh
+setup-*.sh
+WORKFLOW_UPDATES.md
