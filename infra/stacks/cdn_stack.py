@@ -104,7 +104,8 @@ class CDNStack(Stack):
             website_index_document="index.html",
             website_error_document="index.html",  # SPA routing fallback
             versioned=True,
-            removal_policy=self._removal_policy,
+            removal_policy=RemovalPolicy.DESTROY,  # Auto-delete on stack deletion
+            auto_delete_objects=True,  # Delete objects when bucket is deleted
             encryption=s3.BucketEncryption.S3_MANAGED,
             cors=[
                 s3.CorsRule(
