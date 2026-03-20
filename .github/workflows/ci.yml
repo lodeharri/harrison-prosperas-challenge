@@ -11,9 +11,9 @@ on:
 env:
   PYTHON_VERSION: '3.11'
   NODE_VERSION: '20'
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  CDK_APP_NAME: ${{ vars.CDK_APP_NAME || 'harrison-prosperas-challenge' }}
-  STACK_PREFIX: ${{ vars.STACK_PREFIX || 'harrison' }}
+  AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+  CDK_APP_NAME: ${{ vars.CDK_APP_NAME != '' && vars.CDK_APP_NAME || 'harrison-prosperas-challenge' }}
+  STACK_PREFIX: ${{ vars.STACK_PREFIX != '' && vars.STACK_PREFIX || 'harrison' }}
 
 jobs:
   # ============================================
@@ -116,8 +116,8 @@ jobs:
     name: Build Frontend
     runs-on: ubuntu-latest
     env:
-      VITE_API_URL: ${{ env.CI_API_URL || 'http://localhost:8000' }}
-      VITE_WS_URL: ${{ env.CI_WS_URL || 'ws://localhost:8000' }}
+      VITE_API_URL: ${{ vars.CI_API_URL != '' && vars.CI_API_URL || 'http://localhost:8000' }}
+      VITE_WS_URL: ${{ vars.CI_WS_URL != '' && vars.CI_WS_URL || 'ws://localhost:8000' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

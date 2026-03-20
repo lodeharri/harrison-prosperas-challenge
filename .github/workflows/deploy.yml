@@ -5,11 +5,11 @@ on:
     branches: [master]
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'harrison-prospera-challenge' }}
-  FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET || 'harrison-frontend' }}
-  CDK_APP_NAME: ${{ vars.CDK_APP_NAME || 'harrison-prosperas-challenge' }}
-  STACK_PREFIX: ${{ vars.STACK_PREFIX || 'harrison' }}
+  AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY != '' && vars.ECR_REPOSITORY || 'harrison-prospera-challenge' }}
+  FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET != '' && vars.FRONTEND_BUCKET || 'harrison-frontend' }}
+  CDK_APP_NAME: ${{ vars.CDK_APP_NAME != '' && vars.CDK_APP_NAME || 'harrison-prosperas-challenge' }}
+  STACK_PREFIX: ${{ vars.STACK_PREFIX != '' && vars.STACK_PREFIX || 'harrison' }}
 
 permissions:
   id-token: write
