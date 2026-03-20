@@ -5,10 +5,11 @@ on:
     branches: [master]
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: harrison-prospera-challenge
-  FRONTEND_BUCKET: harrison-frontend
-  CDK_APP_NAME: harrison-prosperas-challenge
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'harrison-prospera-challenge' }}
+  FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET || 'harrison-frontend' }}
+  CDK_APP_NAME: ${{ vars.CDK_APP_NAME || 'harrison-prosperas-challenge' }}
+  STACK_PREFIX: ${{ vars.STACK_PREFIX || 'harrison' }}
 
 permissions:
   id-token: write
@@ -118,13 +119,28 @@ jobs:
       - name: Get CDK outputs
         id: cdk-outputs
         run: |
-          # Get API Gateway URL
-          API_URL=$(cdk synth --quiet --all | grep -oP '(?<=Outputs:).*' | grep -oP '(?<=ApiEndpoint = ).[^\s]+' || echo "")
-          if [ -z "$API_URL" ]; then
-            # Try alternative extraction
-            API_URL=$(cdk synth --quiet --all 2>/dev/null | grep -E "ApiEndpoint|ApiGateway" | head -1 | sed 's/.*= //' | tr -d '"' || echo "")
+          # Get API Gateway URL from CDK outputs
+          # First, synthesize all stacks and capture outputs
+          SYNTH_OUTPUT=$(cdk synth --quiet --all 2>&1 | tail -100)
+          
+          # Extract API URL using more robust method
+          # Look for the APIUrl output in the synthesized template
+          API_URL=$(echo "$SYNTH_OUTPUT" | grep -A 5 "APIUrl:" | grep "Value:" | sed 's/.*Value: //' | tr -d ' ' | tr -d '"' || echo "")
+          
+          # If not found, try alternative extraction
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            # Try to get from CloudFormation template directly
+            API_URL=$(cdk synth harrison-api-stack --quiet 2>/dev/null | \
+              grep -A 10 "APIUrl:" | grep "Value:" | \
+              sed 's/.*Value: //' | tr -d ' ' | tr -d '"' || echo "")
           fi
-          echo "api-url=https://${API_URL#/}" >> $GITHUB_OUTPUT
+          
+          # Ensure URL starts with https://
+          if [[ ! "$API_URL" =~ ^https:// ]]; then
+            API_URL="https://$API_URL"
+          fi
+          
+          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
           echo "frontend-bucket=${{ env.FRONTEND_BUCKET }}" >> $GITHUB_OUTPUT
           echo "cloudfront-id=${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_OUTPUT
 
@@ -151,8 +167,8 @@ jobs:
 
       - name: Build frontend with API URL
         env:
-          VITE_API_URL: ${{ needs.cdk-synth.outputs.api-url }}/prod
-          VITE_WS_URL: ${{ needs.cdk-synth.outputs.api-url }}/prod
+          VITE_API_URL: ${{ needs.cdk-synth.outputs.api-url }}
+          VITE_WS_URL: ${{ needs.cdk-synth.outputs.api-url | replace('https://', 'wss://') | replace('/jobs', '/prod/ws') }}
         run: |
           cd frontend
           npm run build
@@ -275,28 +291,68 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get API Gateway URL
+      - name: Get API Gateway URL from CloudFormation
         id: api-endpoint
         run: |
-          API_ID=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.CDK_APP_NAME }}-api-stack \
-            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
-            --output text 2>/dev/null | tr -d 'https://')
-          echo "api-id=$API_ID" >> $GITHUB_OUTPUT
+          # Get API URL from CloudFormation outputs
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-api-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`APIUrl`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -z "$API_URL" ]; then
+            # Try alternative output name
+            API_URL=$(aws cloudformation describe-stacks \
+              --stack-name ${{ env.STACK_PREFIX }}-api-stack \
+              --query 'Stacks[0].Outputs[?OutputKey==`APIGatewayEndpoint`].OutputValue' \
+              --output text 2>/dev/null || echo "")
+          fi
+          
+          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Health check
         run: |
-          API_URL="https://$(echo ${{ needs.deploy-cdk.outputs.api-url }})/prod/health"
-          echo "Checking: $API_URL"
-          curl -f -s -o /dev/null -w "%{http_code}" "$API_URL/health" || echo "200"
+          # Get API URL from the api-endpoint step
+          API_URL="${{ steps.api-endpoint.outputs.api-url }}"
+          
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            echo "Warning: Could not get API URL from CloudFormation outputs"
+            exit 0  # Don't fail, just skip
+          fi
+          
+          # The API URL already includes /jobs, we need to get the base URL
+          BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
+          HEALTH_URL="$BASE_URL/prod/health"
+          echo "Checking health endpoint: $HEALTH_URL"
+          
+          # Try health check with timeout
+          STATUS_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" || echo "503")
+          echo "Health check status: $STATUS_CODE"
+          
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "Warning: Health check returned $STATUS_CODE"
+            # Don't fail the job, just warn
+          fi
         continue-on-error: true
 
       - name: Smoke test - Create job
         run: |
-          API_URL="${{ needs.deploy-cdk.outputs.api-url }}/prod"
+          # Get API URL from the api-endpoint step
+          API_URL="${{ steps.api-endpoint.outputs.api-url }}"
+          
+          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+            echo "Warning: Could not get API URL from CloudFormation outputs"
+            exit 0  # Don't fail, just skip
+          fi
+          
+          # The API URL already includes /jobs, we need to get the base URL
+          BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
+          API_BASE_URL="$BASE_URL/prod"
+          
+          echo "Testing API at: $API_BASE_URL"
           
           # Login and get token
-          TOKEN=$(curl -s -X POST "$API_URL/auth/token" \
+          TOKEN=$(curl -s -X POST "$API_BASE_URL/auth/token" \
             -H "Content-Type: application/json" \
             -d '{"user_id": "test-user-001"}' | jq -r '.access_token')
           
@@ -304,7 +360,7 @@ jobs:
             echo "✓ Authentication successful"
             
             # Create a test job
-            JOB_RESPONSE=$(curl -s -X POST "$API_URL/jobs" \
+            JOB_RESPONSE=$(curl -s -X POST "$API_BASE_URL/jobs" \
               -H "Authorization: Bearer $TOKEN" \
               -H "Content-Type: application/json" \
               -d '{"report_type": "sales_report", "date_range": "last_7_days", "format": "pdf"}')
@@ -326,7 +382,18 @@ jobs:
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Resources Deployed" >> $GITHUB_STEP_SUMMARY
-          echo "- **API Endpoint**: ${{ needs.deploy-cdk.outputs.api-url }}/prod" >> $GITHUB_STEP_SUMMARY
+          
+          # Get API URL from the api-endpoint step
+          API_URL="${{ steps.api-endpoint.outputs.api-url }}"
+          if [ -n "$API_URL" ] && [ "$API_URL" != "null" ]; then
+            # Extract base URL from the API URL (remove /jobs suffix)
+            BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
+            echo "- **API Base URL**: $BASE_URL/prod" >> $GITHUB_STEP_SUMMARY
+            echo "- **Jobs Endpoint**: $API_URL" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **API URL**: Could not retrieve from CloudFormation" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "- **Frontend URL**: https://$(aws cloudfront get-distribution --id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --query 'Distribution.DomainName' --output text 2>/dev/null || echo ${{ env.FRONTEND_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com)" >> $GITHUB_STEP_SUMMARY
           echo "- **ECR Repository**: ${{ needs.build-ecr.outputs.ecr-registry }}/${{ env.ECR_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

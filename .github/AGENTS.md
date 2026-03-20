@@ -105,17 +105,30 @@ gh secret set JWT_SECRET_KEY --body "$JWT_SECRET_KEY"
 
 ## GitHub Variables Required
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `CDK_BOOTSTRAPPED` | Set to `true` after first bootstrap | `true` |
-| `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID | `E1A2B3C4D5E6F7` |
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `CDK_BOOTSTRAPPED` | Set to `true` after first bootstrap | `false` | Yes |
+| `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID | (post-deploy) | No |
+| `AWS_REGION` | AWS region for deployment | `us-east-1` | No |
+| `STACK_PREFIX` | Prefix for all AWS resource names | `harrison` | No |
+| `CDK_APP_NAME` | CDK application name | `harrison-prosperas-challenge` | No |
+| `ECR_REPOSITORY` | ECR repository name | `harrison-prospera-challenge` | No |
+| `FRONTEND_BUCKET` | S3 bucket for frontend | `harrison-frontend` | No |
+| `CI_API_URL` | API URL for CI frontend builds | `http://localhost:8000` | No |
+| `CI_WS_URL` | WebSocket URL for CI frontend builds | `ws://localhost:8000` | No |
 
 ### Adding Variables
 
 ```bash
 # Using GitHub CLI
-gh variable set CDK_BOOTSTRAPPED --body "true"
-gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "E1A2B3C4D5E6F7"
+gh variable set CDK_BOOTSTRAPPED --body "false"
+gh variable set AWS_REGION --body "us-east-1"
+gh variable set STACK_PREFIX --body "harrison"
+gh variable set CDK_APP_NAME --body "harrison-prosperas-challenge"
+gh variable set ECR_REPOSITORY --body "harrison-prospera-challenge"
+gh variable set FRONTEND_BUCKET --body "harrison-frontend"
+gh variable set CI_API_URL --body "http://localhost:8000"
+gh variable set CI_WS_URL --body "ws://localhost:8000"
 
 # Or via GitHub Web UI
 # Settings > Secrets and variables > Variables > New repository variable

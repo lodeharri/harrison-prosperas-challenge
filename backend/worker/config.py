@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # =====================================================================
     # DynamoDB Tables (names defined by CDK for production)
     # =====================================================================
-    # Production (AWS): harrison-jobs, harrison-idempotency
+    # Production (AWS): {STACK_PREFIX}-jobs, {STACK_PREFIX}-idempotency
     # LocalStack (dev): jobs, idempotency_keys
     dynamodb_table_jobs: str = os.getenv("DYNAMODB_TABLE_JOBS", "jobs")
 
@@ -66,15 +66,16 @@ class Settings(BaseSettings):
     # =====================================================================
     # Production (AWS): Full SQS URLs from CDK
     # LocalStack (dev): LocalStack URLs with localhost:4566
+    # Note: Queue names should be set via environment variables
     sqs_queue_url: str = os.getenv(
-        "SQS_QUEUE_URL", "http://localhost:4566/000000000000/harrison-jobs-queue"
+        "SQS_QUEUE_URL", "http://localhost:4566/000000000000/report-jobs-queue"
     )
     sqs_dlq_url: str = os.getenv(
-        "SQS_DLQ_URL", "http://localhost:4566/000000000000/harrison-jobs-dlq"
+        "SQS_DLQ_URL", "http://localhost:4566/000000000000/report-jobs-dlq"
     )
     sqs_priority_queue_url: str = os.getenv(
         "SQS_PRIORITY_QUEUE_URL",
-        "http://localhost:4566/000000000000/harrison-jobs-priority",
+        "http://localhost:4566/000000000000/report-jobs-priority",
     )
 
     # =====================================================================

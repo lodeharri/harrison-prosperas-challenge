@@ -23,15 +23,15 @@ ENVIRONMENT VARIABLES:
     AWS_SECRET_ACCESS_KEY: AWS credentials (from CDK/IRSA in production)
 
     # DynamoDB Tables (AWS production names from CDK)
-    DYNAMODB_TABLE_JOBS:       Table name (default: jobs, production: harrison-jobs)
-    DYNAMODB_TABLE_IDEMPOTENCY: Table name (default: idempotency_keys)
+    DYNAMODB_TABLE_JOBS:       Table name (default: jobs, production: {STACK_PREFIX}-jobs)
+    DYNAMODB_TABLE_IDEMPOTENCY: Table name (default: idempotency_keys, production: {STACK_PREFIX}-idempotency)
 
     # SQS Queues (AWS production names from CDK)
-    SQS_QUEUE_NAME:       Queue name (default: harrison-jobs-queue)
-    SQS_DLQ_NAME:         DLQ name (default: harrison-jobs-dlq)
-    SQS_PRIORITY_QUEUE_NAME: Priority queue name (default: harrison-jobs-priority)
+    SQS_QUEUE_NAME:       Queue name (default: report-jobs-queue, production: {STACK_PREFIX}-jobs-queue)
+    SQS_DLQ_NAME:         DLQ name (default: report-jobs-dlq, production: {STACK_PREFIX}-jobs-dlq)
+    SQS_PRIORITY_QUEUE_NAME: Priority queue name (default: report-jobs-priority, production: {STACK_PREFIX}-jobs-priority)
 
-AWS PRODUCTION RESOURCE NAMES:
+AWS PRODUCTION RESOURCE NAMES (with STACK_PREFIX=harrison):
     - Table: harrison-jobs
     - Table: harrison-idempotency
     - Queue: harrison-jobs-queue
@@ -72,16 +72,14 @@ def get_config() -> dict:
     is_local = _is_localstack()
 
     # Default names for LocalStack, production names from CDK env vars
-    table_name = os.getenv(
-        "DYNAMODB_TABLE_JOBS", "harrison-jobs" if not is_local else "jobs"
-    )
+    table_name = os.getenv("DYNAMODB_TABLE_JOBS", "jobs")
     idempotency_table_name = os.getenv(
         "DYNAMODB_TABLE_IDEMPOTENCY",
-        "harrison-idempotency" if not is_local else "idempotency_keys",
+        "idempotency_keys",
     )
-    queue_name = os.getenv("SQS_QUEUE_NAME", "harrison-jobs-queue")
-    dlq_name = os.getenv("SQS_DLQ_NAME", "harrison-jobs-dlq")
-    priority_queue_name = os.getenv("SQS_PRIORITY_QUEUE_NAME", "harrison-jobs-priority")
+    queue_name = os.getenv("SQS_QUEUE_NAME", "report-jobs-queue")
+    dlq_name = os.getenv("SQS_DLQ_NAME", "report-jobs-dlq")
+    priority_queue_name = os.getenv("SQS_PRIORITY_QUEUE_NAME", "report-jobs-priority")
 
     # Endpoint: LocalStack URL if set, None for native AWS
     endpoint_url = os.getenv("AWS_ENDPOINT_URL")

@@ -1,0 +1,18 @@
+{
+  "name": "infra",
+  "version": "1.0.0",
+  "description": "This directory contains the AWS Cloud Development Kit (CDK) infrastructure code for deploying the Reto Prosperas job processing system to AWS.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "aws-cdk-lib": "^2.244.0",
+    "cdk-nag": "^2.37.55",
+    "constructs": "^10.5.1"
+  }
+}

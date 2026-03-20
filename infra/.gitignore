@@ -1,0 +1,40 @@
+# AWS CDK generated files
+cdk.out/
+*.assets.json
+*.template.json
+manifest.json
+tree.json
+*.zip
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

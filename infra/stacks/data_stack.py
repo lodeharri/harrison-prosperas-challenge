@@ -57,6 +57,9 @@ class DataStack(Stack):
             else RemovalPolicy.RETAIN
         )
 
+        # Get stack prefix from context
+        self.stack_prefix = self.node.try_get_context("stackPrefix") or "harrison"
+
         # ===================================================================
         # DynamoDB Tables
         # ===================================================================
@@ -98,7 +101,7 @@ class DataStack(Stack):
         table = dynamodb.Table(
             self,
             "JobsTable",
-            table_name="harrison-jobs",
+            table_name=f"{self.stack_prefix}-jobs",
             partition_key=dynamodb.Attribute(
                 name="job_id",
                 type=dynamodb.AttributeType.STRING,
@@ -153,7 +156,7 @@ class DataStack(Stack):
         table = dynamodb.Table(
             self,
             "IdempotencyTable",
-            table_name="harrison-idempotency",
+            table_name=f"{self.stack_prefix}-idempotency",
             partition_key=dynamodb.Attribute(
                 name="idempotency_key",
                 type=dynamodb.AttributeType.STRING,
@@ -176,7 +179,7 @@ class DataStack(Stack):
         dlq = sqs.Queue(
             self,
             "JobsDLQ",
-            queue_name="harrison-jobs-dlq",
+            queue_name=f"{self.stack_prefix}-jobs-dlq",
             retention_period=Duration.days(14),
             removal_policy=self._removal_policy,
         )
@@ -202,7 +205,7 @@ class DataStack(Stack):
         queue = sqs.Queue(
             self,
             "JobsQueue",
-            queue_name="harrison-jobs-queue",
+            queue_name=f"{self.stack_prefix}-jobs-queue",
             visibility_timeout=Duration.seconds(60),
             retention_period=Duration.days(1),
             dead_letter_queue=sqs.DeadLetterQueue(
@@ -244,7 +247,7 @@ class DataStack(Stack):
         queue = sqs.Queue(
             self,
             "JobsPriorityQueue",
-            queue_name="harrison-jobs-priority",
+            queue_name=f"{self.stack_prefix}-jobs-priority",
             visibility_timeout=Duration.seconds(30),
             retention_period=Duration.days(1),
             removal_policy=self._removal_policy,
