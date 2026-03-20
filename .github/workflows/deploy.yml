@@ -377,6 +377,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: infra/package-lock.json
 
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt update \
+          && sudo apt install gh -y
+
       - name: Install dependencies
         run: |
           cd infra
@@ -396,7 +405,7 @@ jobs:
             echo "CDK_BOOTSTRAPPED is false or not set, checking bootstrap status..."
             
             # Check if CDK is actually bootstrapped by trying to list stacks
-            if cdk list --all 2>/dev/null; then
+            if npx cdk list --all 2>/dev/null; then
               echo "CDK is already bootstrapped (verified with cdk list)"
               echo "bootstrapped=true" >> $GITHUB_OUTPUT
               
@@ -407,10 +416,10 @@ jobs:
               echo "CDK not bootstrapped. Bootstrapping now..."
               
               # Bootstrap CDK
-              cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+              npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
               
               # Verify bootstrap succeeded
-              if cdk list --all 2>/dev/null; then
+              if npx cdk list --all 2>/dev/null; then
                 echo "CDK bootstrap successful"
                 echo "bootstrapped=true" >> $GITHUB_OUTPUT
                 
@@ -432,7 +441,7 @@ jobs:
         run: |
           cd infra
           # Pass imageTag context to CDK for ECR image reference
-          cdk deploy --all --require-approval never --concurrency 3 \
+          npx cdk deploy --all --require-approval never --concurrency 3 \
             -c imageTag=${{ needs.build-ecr.outputs.image-tag }}
         env:
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
