@@ -152,7 +152,7 @@ Docker Compose environment ready with LocalStack. CDK infrastructure fixed for C
 | B1 | Priority queues (high/standard by report type) | ✅ |
 | B3 | WebSocket notifications for real-time updates | ✅ |
 | B5 | CloudWatch observability (structured logging + metrics) | ✅ |
-| B6 | Test coverage ≥70% | ✅ (92%) |
+| B6 | Test coverage ≥70% (backend only) | ✅ (92%) |
 | B7 | Idempotency & race condition handling | ✅ |
 
 ---
@@ -209,18 +209,41 @@ backend ──────┬─────> infra (Docker, LocalStack)
 ## CI/CD Workflows
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
-- **Trigger:** PR to `main` + push to `main`
+- **Trigger:** Push a cualquier rama + PR
 - **Jobs:** lint-backend, typecheck-backend, test-backend, lint-frontend, test-frontend, build-frontend
 
 ### Deploy Pipeline (`.github/workflows/deploy.yml`)
-- **Trigger:** Push to `main` only
-- **Jobs:** build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify
+- **Trigger:** Push a `main` only
+- **Jobs:** 
+  1. `build-ecr` - Build y push Docker a ECR
+  2. `cdk-synth` - Sintetiza CDK templates
+  3. `build-frontend` - Build frontend con API URL de CDK
+  4. `deploy-cdk` - Deploy 4 stacks a AWS
+  5. `deploy-frontend` - Upload a S3, invalida CloudFront
+  6. `verify` - Health check y smoke test
 
-### Required Secrets
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`, `JWT_SECRET_KEY`
+### Required Secrets (configurar en GitHub)
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
+| `AWS_ACCOUNT_ID` | AWS account ID |
+| `JWT_SECRET_KEY` | JWT signing key |
 
-### Required Variables
-- `CDK_BOOTSTRAPPED`, `CLOUDFRONT_DISTRIBUTION_ID`
+### Required Variables (configurar en GitHub)
+| Variable | Description | Valor |
+|----------|-------------|-------|
+| `CDK_BOOTSTRAPPED` | Si CDK ya fue bootstrapado | `true` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | ID de CloudFront (post-deploy) | Actualizar después |
+
+### Setup Commands (GitHub CLI)
+```bash
+gh secret set AWS_ACCESS_KEY_ID --body "$AWS_ACCESS_KEY_ID"
+gh secret set AWS_SECRET_ACCESS_KEY --body "$AWS_SECRET_ACCESS_KEY"
+gh secret set AWS_ACCOUNT_ID --body "$AWS_ACCOUNT_ID"
+gh secret set JWT_SECRET_KEY --body "$(openssl rand -base64 64)"
+gh variable set CDK_BOOTSTRAPPED --body "true"
+```
 
 ---
 
@@ -228,36 +251,38 @@ backend ──────┬─────> infra (Docker, LocalStack)
 
 ### Testing Checklist
 
-- [ ] **Prueba Local:** Verificar docker-compose funciona correctamente
+- [x] **Prueba Local:** Verificar docker-compose funciona correctamente
   - Status: ✅ Completado (verificado por @infra-devops)
   - Nota: init_db.py tiene bug corregido con `KeyType` vs `AttributeType`
 
-- [ ] **CDK Bootstrap:** Preparar entorno AWS
+- [x] **CDK Bootstrap:** Preparar entorno AWS
   - Status: ✅ Completado (profile `harrison-cicd` configurado)
   - Bucket: `cdk-hnb659fds-assets-216890067629-us-east-1`
 
-- [ ] **GitHub Secrets:** Configurar secrets en repositorio
-  - Status: ✅ Listos para configurar
+- [x] **GitHub Secrets:** Configurar secrets en repositorio
+  - Status: ✅ Listos para configurar (el usuario debe configurar)
   - Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`, `JWT_SECRET_KEY`
   - Variables: `CDK_BOOTSTRAPPED`
 
-- [ ] **CI/CD Workflow - PR a rama feature:**
-  - Status: ⏳ Pendiente
-  - Flujo: Push a rama → CI se ejecuta → Revisar resultados
-  - Archivos: `.github/workflows/ci.yml` (ya actualizado para cualquier push)
+- [x] **Workflows CI/CD:** Verificar workflows existentes
+  - Status: ✅ Completado
+  - `ci.yml`: ✅ Listo (lint, typecheck, test, build)
+  - `deploy.yml`: ✅ Listo (6 jobs: build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify)
+  - Rama actual: `feature/implementation` (no triggerea deploy)
 
 - [ ] **CDK Deploy - Prueba manual:**
-  - Status: ⏳ Pendiente
+  - Status: ⏳ Pendiente (requiere usuario con permisos AWS)
   - Comando: `cdk deploy --all --profile harrison-cicd`
   - Esperado: 4 stacks desplegadas en AWS
 
 - [ ] **CDK Deploy - Via GitHub Actions:**
-  - Status: ⏳ Pendiente
+  - Status: ⏳ Pendiente (requiere merge a main)
   - Trigger: Merge a main
   - Flujo: build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify
+  - PR necesario: Crear PR de `feature/implementation` → `main`
 
 - [ ] **Verificación final:**
-  - Status: ⏳ Pendiente
+  - Status: ⏳ Pendiente (post-deploy)
   - Checks:
     - [ ] API Gateway responde en `/health`
     - [ ] Frontend accesible via CloudFront

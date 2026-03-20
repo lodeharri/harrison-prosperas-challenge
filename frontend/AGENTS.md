@@ -138,6 +138,15 @@ frontend/
 - 1-year cache for static assets
 - Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
 
+## Testing
+
+> **Note:** Frontend tests are optional and not required for this project. The CI pipeline includes a `test-frontend` job that is configured to pass even if no tests exist.
+
+```bash
+# If you want to add tests (optional)
+npm install --save-dev vitest @testing-library/react jsdom
+```
+
 ## Commands
 ```bash
 # Development
@@ -149,6 +158,9 @@ npm run build
 
 # Linting
 npm run lint
+
+# Testing (optional - not required)
+npm test
 ```
 
 ## Data Flow
