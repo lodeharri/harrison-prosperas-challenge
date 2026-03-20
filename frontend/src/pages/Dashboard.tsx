@@ -59,7 +59,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
       
       // Update the specific job in the local list
       updateJobLocally(message.data.job_id, {
-        status: message.data.status as any,
+        status: message.data.status,
         result_url: message.data.result_url,
         updated_at: message.data.updated_at,
       });
@@ -74,7 +74,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
       connect(userId);
     }
     return () => disconnect();
-  }, [userId]);
+  }, [userId, connect, disconnect]);
 
   const handleCreateJob = async (data: { report_type: string; date_range: string; format: string }) => {
     const jobData: JobCreateRequest = {
