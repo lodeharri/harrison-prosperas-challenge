@@ -41,14 +41,34 @@ jobs:
           
           ALL_PRESENT="true"
           
-          for SECRET in "${REQUIRED_SECRETS[@]}"; do
-            if [ -z "${{ secrets[SECRET] }}" ]; then
-              echo "❌ Missing secret: $SECRET"
-              ALL_PRESENT="false"
-            else
-              echo "✅ Secret present: $SECRET"
-            fi
-          done
+          # Check each secret individually
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "❌ Missing secret: AWS_ACCESS_KEY_ID"
+            ALL_PRESENT="false"
+          else
+            echo "✅ Secret present: AWS_ACCESS_KEY_ID"
+          fi
+          
+          if [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then
+            echo "❌ Missing secret: AWS_SECRET_ACCESS_KEY"
+            ALL_PRESENT="false"
+          else
+            echo "✅ Secret present: AWS_SECRET_ACCESS_KEY"
+          fi
+          
+          if [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+            echo "❌ Missing secret: AWS_ACCOUNT_ID"
+            ALL_PRESENT="false"
+          else
+            echo "✅ Secret present: AWS_ACCOUNT_ID"
+          fi
+          
+          if [ -z "${{ secrets.JWT_SECRET_KEY }}" ]; then
+            echo "❌ Missing secret: JWT_SECRET_KEY"
+            ALL_PRESENT="false"
+          else
+            echo "✅ Secret present: JWT_SECRET_KEY"
+          fi
           
           if [ "$ALL_PRESENT" = "false" ]; then
             echo "::error::Missing required secrets. Please configure all secrets in GitHub repository settings."
@@ -75,6 +95,9 @@ jobs:
           else
             echo "✅ Variable CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}"
           fi
+          
+          # Set output
+          echo "all-secrets-present=$ALL_PRESENT" >> $GITHUB_OUTPUT
 
   # ============================================
   # Job 1: Build and push Docker to ECR
