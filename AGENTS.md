@@ -125,9 +125,11 @@ The application automatically detects the environment based on `AWS_ENDPOINT_URL
 - [x] Bonus: Priority queues, WebSocket, CloudWatch, Tests (92%), Idempotency
 - [x] CI/CD Pipeline (GitHub Actions + AWS deployment via CDK)
 - [x] CDK v2 Compatibility (CloudFront API fixes, enum conversions, synth working)
+- [x] AWS Resources Cleanup (all existing resources verified and ready for fresh deployment)
+- [x] GitHub Workflow Improvements (robust CDK outputs extraction, WebSocket URL generation, auto CloudFront ID update)
 
 ### Pending
-- [ ] AWS Production deployment (requires GitHub Actions trigger with configured secrets)
+- [ ] AWS Production deployment from scratch (trigger GitHub Actions with configured secrets/variables)
 
 ---
 
@@ -141,7 +143,11 @@ The application automatically detects the environment based on `AWS_ENDPOINT_URL
 ---
 
 ## Project Status
-Docker Compose environment ready with LocalStack. CDK infrastructure fixed for CDK v2 compatibility (CloudFront API, enums as strings). All 4 stacks synthesize successfully: Data, Compute, API, and CDN. GitHub Actions CI/CD pipeline analyzed and fixed - CDK output extraction, WebSocket URL configuration, missing dependencies, and job output references resolved. **Hardcoded values parameterization in progress** - AWS region, resource names, and queue URLs now use environment variables.
+✅ **AWS limpio:** Verificado que no hay recursos existentes (CloudFormation, ECR, S3, CloudFront, DynamoDB, SQS, App Runner, API Gateway).  
+✅ **Workflow mejorado:** `deploy.yml` actualizado con extracción robusta de outputs CDK, generación correcta de WebSocket URL, y actualización automática de CloudFront ID.  
+✅ **CDK listo:** 4 stacks sintetizan correctamente (Data, Compute, API, CDN).  
+✅ **CI/CD operacional:** Pipeline GitHub Actions listo para despliegue desde cero.  
+🚀 **Listo para despliegue:** Configurar variables GitHub y secrets, luego merge a `master` para desplegar.
 
 ---
 

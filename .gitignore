@@ -33,6 +33,10 @@ htmlcov/
 .tox/
 .coverage.*
 *,cover
+*.pyc
+*.pyo
+*.pyd
+.python-version
 
 # Virtual environments
 venv/
@@ -56,9 +60,45 @@ cdk.out/
 manifest.json
 tree.json
 *.zip
+cdk.context.json
+cdk.json.backup
+*.cdk.staging/
+.cdk/
+
+# Build artifacts
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+*.deb
+*.rpm
+*.dmg
+*.pkg
+*.exe
+*.msi
+*.app
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+*.out
+*.jar
+*.war
+*.ear
+*.class
+*.ipa
+*.apk
 
 # Docker
 docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.dev.yml
+*.dockerignore
+.docker/
 
 # IDE
 .idea/
@@ -72,6 +112,19 @@ docker-compose.override.yml
 *.launch
 *.project
 *.pydevproject
+*.sublime-*
+*.code-workspace
+*.iml
+*.ipr
+*.iws
+*.komodoproject
+*.tmproj
+*.vs/
+*.vscode/
+.vscode-test/
+.history/
+.session
+.ropeproject/
 
 # OS
 .DS_Store
@@ -82,6 +135,17 @@ docker-compose.override.yml
 ehthumbs.db
 Thumbs.db
 desktop.ini
+*.lnk
+*.stackdump
+Icon?
+Network Trash Folder
+Temporary Items
+.apdisk
+.fseventsd
+.Spotlight-V100
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.com.apple.timemachine.supported
 
 # Logs
 *.log
@@ -90,6 +154,24 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+*.log.*
+log/
+*.logs
+debug.log
+error.log
+access.log
+nginx.log
+uwsgi.log
+gunicorn.log
+supervisor.log
+*.pid
+*.pid.lock
+*.sock
+*.sock.*
+*.lock
+*.lock.*
+.lock
+.lock.*
 
 # Runtime data
 pids
@@ -175,3 +257,56 @@ temp/
 *.local
 local.*
 *.local.*
+
+# Tool-specific caches
+.opencode/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.storybook-out/
+storybook-static/
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.eslintcache
+.node_repl_history
+.yarn-integrity
+.npm
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+.jest-cache/
+.nyc_output/
+.rollup.cache/
+.webpack-cache/
+.turbo/
+.svelte-kit/
+.astro/
+.quasar/
+.nuxt/
+.nuxt-prod/
+.nuxt-dev/
+.nuxt-generate/
+.nuxt-storybook/
+.nuxt-typescript/
+.nuxt-i18n/
+.nuxt-pwa/
+.nuxt-sitemap/
+.nuxt-robots/
+.nuxt-security/
+.nuxt-svg/
+.nuxt-image/
+.nuxt-content/
+.nuxt-color-mode/
+.nuxt-graphql-client/
+.nuxt-ionic/
+.nuxt-tailwindcss/
+.nuxt-buefy/
+.nuxt-vuetify/
+.nuxt-bootstrap-vue/
+.nuxt-primevue/

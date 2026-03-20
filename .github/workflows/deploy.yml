@@ -81,6 +81,7 @@ jobs:
       api-url: ${{ steps.cdk-outputs.outputs.api-url }}
       frontend-bucket: ${{ steps.cdk-outputs.outputs.frontend-bucket }}
       cloudfront-id: ${{ steps.cdk-outputs.outputs.cloudfront-id }}
+      websocket-url: ${{ steps.cdk-outputs.outputs.websocket-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -119,30 +120,51 @@ jobs:
       - name: Get CDK outputs
         id: cdk-outputs
         run: |
-          # Get API Gateway URL from CDK outputs
-          # First, synthesize all stacks and capture outputs
-          SYNTH_OUTPUT=$(cdk synth --quiet --all 2>&1 | tail -100)
+          # Get API Gateway URL from CDK outputs using cdk list command
+          echo "Getting CDK outputs..."
           
-          # Extract API URL using more robust method
-          # Look for the APIUrl output in the synthesized template
-          API_URL=$(echo "$SYNTH_OUTPUT" | grep -A 5 "APIUrl:" | grep "Value:" | sed 's/.*Value: //' | tr -d ' ' | tr -d '"' || echo "")
+          # Get all outputs from CDK
+          CDK_OUTPUTS=$(cdk list --all --outputs-file /tmp/cdk-outputs.json 2>&1 || true)
           
-          # If not found, try alternative extraction
-          if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
-            # Try to get from CloudFormation template directly
-            API_URL=$(cdk synth harrison-api-stack --quiet 2>/dev/null | \
-              grep -A 10 "APIUrl:" | grep "Value:" | \
-              sed 's/.*Value: //' | tr -d ' ' | tr -d '"' || echo "")
+          # If cdk list fails, synthesize and extract from templates
+          if [ ! -f /tmp/cdk-outputs.json ]; then
+            echo "Using fallback method to extract outputs..."
+            
+            # Synthesize API stack and extract outputs
+            API_URL=$(cdk synth ${{ env.STACK_PREFIX }}-api-stack --quiet 2>/dev/null | \
+              grep -A 10 '"APIUrl"' | grep '"Value"' | \
+              sed 's/.*"Value": "//' | sed 's/".*//' | head -1 || echo "")
+            
+            # Synthesize CDN stack and extract CloudFront ID
+            CLOUDFRONT_ID=$(cdk synth ${{ env.STACK_PREFIX }}-cdn-stack --quiet 2>/dev/null | \
+              grep -A 10 '"CloudFrontDistributionId"' | grep '"Value"' | \
+              sed 's/.*"Value": "//' | sed 's/".*//' | head -1 || echo "")
+          else
+            # Parse outputs from JSON file
+            API_URL=$(jq -r '.[]."${{ env.STACK_PREFIX }}-api-stack".APIUrl // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
+            CLOUDFRONT_ID=$(jq -r '.[]."${{ env.STACK_PREFIX }}-cdn-stack".CloudFrontDistributionId // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
           fi
           
           # Ensure URL starts with https://
-          if [[ ! "$API_URL" =~ ^https:// ]]; then
+          if [[ -n "$API_URL" && ! "$API_URL" =~ ^https:// ]]; then
             API_URL="https://$API_URL"
           fi
           
+          # Generate WebSocket URL from API URL
+          WEBSOCKET_URL=""
+          if [[ -n "$API_URL" ]]; then
+            # Convert https:// to wss:// and add /prod/ws
+            WEBSOCKET_URL=$(echo "$API_URL" | sed 's|https://|wss://|' | sed 's|/jobs.*||')/prod/ws
+          fi
+          
+          echo "API URL: $API_URL"
+          echo "WebSocket URL: $WEBSOCKET_URL"
+          echo "CloudFront ID: $CLOUDFRONT_ID"
+          
           echo "api-url=$API_URL" >> $GITHUB_OUTPUT
           echo "frontend-bucket=${{ env.FRONTEND_BUCKET }}" >> $GITHUB_OUTPUT
-          echo "cloudfront-id=${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_OUTPUT
+          echo "cloudfront-id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
+          echo "websocket-url=$WEBSOCKET_URL" >> $GITHUB_OUTPUT
 
   # ============================================
   # Job 3: Build frontend with correct API URL
@@ -168,7 +190,7 @@ jobs:
       - name: Build frontend with API URL
         env:
           VITE_API_URL: ${{ needs.cdk-synth.outputs.api-url }}
-          VITE_WS_URL: ${{ needs.cdk-synth.outputs.api-url | replace('https://', 'wss://') | replace('/jobs', '/prod/ws') }}
+          VITE_WS_URL: ${{ needs.cdk-synth.outputs.websocket-url }}
         run: |
           cd frontend
           npm run build
@@ -217,11 +239,20 @@ jobs:
           npm install
           pip install -r requirements.txt
 
-      - name: Bootstrap CDK
-        if: vars.CDK_BOOTSTRAPPED != 'true'
+      - name: Bootstrap CDK (if needed)
+        id: cdk-bootstrap
         run: |
           cd infra
-          cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+          
+          # Check if CDK is already bootstrapped
+          if cdk list --all 2>/dev/null; then
+            echo "CDK already bootstrapped"
+            echo "bootstrapped=true" >> $GITHUB_OUTPUT
+          else
+            echo "Bootstrapping CDK..."
+            cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+            echo "bootstrapped=true" >> $GITHUB_OUTPUT
+          fi
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
@@ -266,11 +297,34 @@ jobs:
           aws s3 sync ./dist s3://${{ env.FRONTEND_BUCKET }}/ --delete
           aws s3 cp ./dist/index.html s3://${{ env.FRONTEND_BUCKET }}/ --metadata-directive REPLACE
 
+      - name: Get CloudFront Distribution ID
+        id: get-cloudfront
+        run: |
+          # Try to get CloudFront ID from CDN stack outputs
+          CLOUDFRONT_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$CLOUDFRONT_ID" ]; then
+            echo "CloudFront Distribution ID: $CLOUDFRONT_ID"
+            echo "distribution-id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
+            
+            # Update GitHub variable if different
+            CURRENT_VAR="${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}"
+            if [ "$CLOUDFRONT_ID" != "$CURRENT_VAR" ]; then
+              echo "Updating CLOUDFRONT_DISTRIBUTION_ID variable..."
+              gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "$CLOUDFRONT_ID"
+            fi
+          else
+            echo "Warning: Could not get CloudFront Distribution ID"
+          fi
+
       - name: Invalidate CloudFront
-        if: vars.CLOUDFRONT_DISTRIBUTION_ID != ''
+        if: steps.get-cloudfront.outputs.distribution-id != ''
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --distribution-id ${{ steps.get-cloudfront.outputs.distribution-id }} \
             --paths "/*"
 
   # ============================================
