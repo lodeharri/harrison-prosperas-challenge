@@ -20,7 +20,6 @@ from aws_cdk import (
     Stack,
     aws_apprunner as apprunner,
     aws_ecr as ecr,
-    aws_ecr_assets as ecr_assets,
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
 )
@@ -330,16 +329,17 @@ class ComputeStack(Stack):
             - Max instances: 10 (auto-scaling)
             - Health check: /health endpoint
             - Port: 8000
-        """
-        # Get the latest ECR image
-        image_asset = ecr_assets.DockerImageAsset(
-            self,
-            "APIDockerImage",
-            directory="../backend",  # Backend directory where Dockerfile is
-        )
 
-        # Grant App Runner access to pull images
-        self.ecr_repository.grant_pull(self.api_role)
+        Note: Uses the ECR repository's :latest image tag.
+        The image is built and pushed in the CI/CD pipeline (build-ecr job).
+        """
+        # Get image tag from CDK context, default to 'latest'
+        # The CI/CD pipeline passes IMAGE_TAG as an env var
+        image_tag = self.node.try_get_context("imageTag") or "latest"
+
+        # Reference the ECR repository (already created by this stack)
+        # The image URI is: <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>
+        image_identifier = f"{self.ecr_repository.repository_uri}:{image_tag}"
 
         service = apprunner.CfnService(
             self,
@@ -350,7 +350,7 @@ class ComputeStack(Stack):
                     access_role_arn=self.api_role.role_arn,
                 ),
                 image_repository=apprunner.CfnService.ImageRepositoryProperty(
-                    image_identifier=image_asset.image_uri,
+                    image_identifier=image_identifier,
                     image_repository_type="ECR",
                     image_configuration=apprunner.CfnService.ImageConfigurationProperty(
                         port="8000",
@@ -409,17 +409,18 @@ class ComputeStack(Stack):
             - Max instances: 5 (limit concurrency)
             - No health check (background worker)
             - Environment: Worker-specific variables
-        """
-        # Use the same Docker image but with different entrypoint
-        # The worker command is defined in docker-compose and Dockerfile
-        image_asset = ecr_assets.DockerImageAsset(
-            self,
-            "WorkerDockerImage",
-            directory="../backend",
-        )
 
-        # Grant App Runner access to pull images
-        self.ecr_repository.grant_pull(self.worker_role)
+        Note: Uses the ECR repository's :latest image tag.
+        The image is built and pushed in the CI/CD pipeline (build-ecr job).
+        The worker uses a different start_command to run the worker module.
+        """
+        # Get image tag from CDK context, default to 'latest'
+        # The CI/CD pipeline passes IMAGE_TAG as an env var
+        image_tag = self.node.try_get_context("imageTag") or "latest"
+
+        # Reference the ECR repository (already created by this stack)
+        # The image URI is: <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>
+        image_identifier = f"{self.ecr_repository.repository_uri}:{image_tag}"
 
         service = apprunner.CfnService(
             self,
@@ -430,7 +431,7 @@ class ComputeStack(Stack):
                     access_role_arn=self.worker_role.role_arn,
                 ),
                 image_repository=apprunner.CfnService.ImageRepositoryProperty(
-                    image_identifier=image_asset.image_uri,
+                    image_identifier=image_identifier,
                     image_repository_type="ECR",
                     image_configuration=apprunner.CfnService.ImageConfigurationProperty(
                         port="8000",  # Still expose port but worker doesn't use it

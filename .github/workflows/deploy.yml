@@ -40,6 +40,15 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Create ECR repository (if not exists)
+        run: |
+          # Create ECR repository if it doesn't exist
+          aws ecr create-repository \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-scanning-configuration scanOnPush=true \
+            --region ${{ env.AWS_REGION }} \
+            2>/dev/null || echo "Repository already exists"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -203,10 +212,12 @@ jobs:
       - name: Deploy CDK stacks
         run: |
           cd infra
-          cdk deploy --all --require-approval never --concurrency 3
+          # Pass imageTag context to CDK for ECR image reference
+          cdk deploy --all --require-approval never --concurrency 3 \
+            -c imageTag=${{ needs.build-ecr.outputs.image-tag }}
         env:
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ needs.build-ecr.outputs.image-tag }}
           ECR_REGISTRY: ${{ needs.build-ecr.outputs.ecr-registry }}
           ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
 
