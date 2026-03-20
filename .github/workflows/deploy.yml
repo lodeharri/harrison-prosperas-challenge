@@ -409,9 +409,9 @@ jobs:
               echo "CDK is already bootstrapped (verified with cdk list)"
               echo "bootstrapped=true" >> $GITHUB_OUTPUT
               
-              # Update the GitHub variable for future runs
-              echo "Updating CDK_BOOTSTRAPPED variable to true..."
-              gh variable set CDK_BOOTSTRAPPED --body "true"
+              # Try to update the GitHub variable for future runs (may fail due to permissions)
+              echo "Attempting to update CDK_BOOTSTRAPPED variable to true..."
+              gh variable set CDK_BOOTSTRAPPED --body "true" || echo "⚠️ Could not update CDK_BOOTSTRAPPED variable (permissions issue). Continuing anyway."
             else
               echo "CDK not bootstrapped. Bootstrapping now..."
               
@@ -423,9 +423,9 @@ jobs:
                 echo "CDK bootstrap successful"
                 echo "bootstrapped=true" >> $GITHUB_OUTPUT
                 
-                # Update the GitHub variable
-                echo "Updating CDK_BOOTSTRAPPED variable to true..."
-                gh variable set CDK_BOOTSTRAPPED --body "true"
+                # Try to update the GitHub variable (may fail due to permissions)
+                echo "Attempting to update CDK_BOOTSTRAPPED variable to true..."
+                gh variable set CDK_BOOTSTRAPPED --body "true" || echo "⚠️ Could not update CDK_BOOTSTRAPPED variable (permissions issue). Continuing anyway."
               else
                 echo "ERROR: CDK bootstrap failed"
                 echo "bootstrapped=false" >> $GITHUB_OUTPUT
