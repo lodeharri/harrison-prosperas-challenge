@@ -5,6 +5,43 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# ============================================
+# 📋 WORKFLOW DOCUMENTATION
+# ============================================
+#
+# This workflow deploys the complete application to AWS with automatic CDK bootstrap.
+# It's designed to be completely portable - works on any new AWS account.
+#
+# 🔧 HOW IT WORKS:
+# 1. Pre-deployment checks verify all required secrets are configured
+# 2. Build and push Docker image to ECR
+# 3. Synthesize CDK templates to get API URLs
+# 4. Build frontend with production API URLs
+# 5. Auto-bootstrap CDK if needed (detects and bootstraps automatically)
+# 6. Deploy all CDK stacks (Data, Compute, API, CDN)
+# 7. Upload frontend to S3 and invalidate CloudFront
+# 8. Verify deployment with health checks and smoke tests
+#
+# 🚀 AUTO-BOOTSTRAP FEATURES:
+# - Detects if CDK is already bootstrapped (checks CloudFormation stack, S3 bucket, cdk list)
+# - Bootstraps automatically if needed with retry logic
+# - Updates CDK_BOOTSTRAPPED GitHub variable automatically
+# - Provides troubleshooting information if bootstrap fails
+#
+# 🔐 REQUIRED SECRETS (configure in GitHub Settings > Secrets > Actions):
+#   AWS_ACCESS_KEY_ID          - AWS access key with AdministratorAccess
+#   AWS_SECRET_ACCESS_KEY      - AWS secret key
+#   AWS_ACCOUNT_ID             - AWS account ID (12 digits)
+#   JWT_SECRET_KEY             - JWT signing key (generate with: openssl rand -base64 64)
+#
+# 📝 REQUIRED VARIABLES (will be auto-created/updated):
+#   CDK_BOOTSTRAPPED           - Set to "true" after first bootstrap (auto-updated)
+#   CLOUDFRONT_DISTRIBUTION_ID - CloudFront ID (auto-updated after deployment)
+#
+# ⏱️  ESTIMATED DEPLOYMENT TIME: 10-15 minutes
+# 💰 ESTIMATED MONTHLY COST: < $10 USD
+# ============================================
+
 env:
   AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY != '' && vars.ECR_REPOSITORY || 'harrison-prospera-challenge' }}
@@ -16,6 +53,9 @@ permissions:
   id-token: write
   contents: read
   actions: read
+  # Additional permissions needed for GitHub CLI operations
+  variables: write  # For updating CDK_BOOTSTRAPPED variable
+  pull-requests: write  # For deployment summaries
 
 jobs:
   # ============================================
@@ -82,19 +122,26 @@ jobs:
           echo ""
           echo "Checking GitHub variables..."
           
-          # Check CDK_BOOTSTRAPPED variable
-          if [ -z "${{ vars.CDK_BOOTSTRAPPED }}" ]; then
-            echo "⚠️ Variable CDK_BOOTSTRAPPED is not set. It will be created during deployment."
-          else
-            echo "✅ Variable CDK_BOOTSTRAPPED: ${{ vars.CDK_BOOTSTRAPPED }}"
-          fi
-          
-          # Check CLOUDFRONT_DISTRIBUTION_ID variable (optional)
-          if [ -z "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
-            echo "ℹ️ Variable CLOUDFRONT_DISTRIBUTION_ID is not set. It will be created during deployment."
-          else
-            echo "✅ Variable CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}"
-          fi
+           # Check CDK_BOOTSTRAPPED variable
+           if [ -z "${{ vars.CDK_BOOTSTRAPPED }}" ]; then
+             echo "⚠️ Variable CDK_BOOTSTRAPPED is not set. It will be created during deployment."
+             echo "ℹ️ This is normal for first-time deployments."
+           else
+             echo "✅ Variable CDK_BOOTSTRAPPED: ${{ vars.CDK_BOOTSTRAPPED }}"
+           fi
+           
+           # Check CLOUDFRONT_DISTRIBUTION_ID variable (optional)
+           if [ -z "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+             echo "ℹ️ Variable CLOUDFRONT_DISTRIBUTION_ID is not set. It will be created during deployment."
+           else
+             echo "✅ Variable CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}"
+           fi
+           
+           echo ""
+           echo "🔐 IAM Permissions Check (basic)..."
+           echo "ℹ️ For CDK bootstrap, AWS credentials need AdministratorAccess or equivalent permissions."
+           echo "ℹ️ Required permissions: CloudFormation, S3, IAM, EC2, ECR, App Runner, DynamoDB, SQS, API Gateway, CloudFront"
+           echo "ℹ️ If bootstrap fails, check IAM permissions in AWS Console."
           
           # Set output
           echo "all-secrets-present=$ALL_PRESENT" >> $GITHUB_OUTPUT
@@ -392,47 +439,80 @@ jobs:
           npm install
           pip install -r requirements.txt
 
+      - name: Verify AWS credentials and permissions
+        id: verify-aws
+        run: |
+          echo "🔐 Verifying AWS credentials and permissions..."
+          
+          # Test AWS credentials by calling a simple API
+          if aws sts get-caller-identity --output text --query 'Account' 2>/dev/null; then
+            AWS_ACCOUNT=$(aws sts get-caller-identity --output text --query 'Account')
+            echo "✅ AWS credentials valid"
+            echo "✅ AWS Account ID: $AWS_ACCOUNT"
+            
+            # Verify account ID matches secret
+            if [ "$AWS_ACCOUNT" = "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
+              echo "✅ AWS Account ID matches secret"
+            else
+              echo "⚠️ AWS Account ID mismatch:"
+              echo "   From credentials: $AWS_ACCOUNT"
+              echo "   From secret: ${{ secrets.AWS_ACCOUNT_ID }}"
+              echo "   This may cause issues with CDK bootstrap."
+            fi
+            
+            # Test basic permissions
+            echo "🔍 Testing basic permissions..."
+            
+            # Test CloudFormation permissions
+            if aws cloudformation list-stacks --max-items 1 2>/dev/null; then
+              echo "✅ CloudFormation permissions OK"
+            else
+              echo "⚠️ CloudFormation permissions may be limited"
+            fi
+            
+            # Test S3 permissions
+            if aws s3 ls --max-items 1 2>/dev/null; then
+              echo "✅ S3 permissions OK"
+            else
+              echo "⚠️ S3 permissions may be limited"
+            fi
+            
+            echo "aws-valid=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ AWS credentials invalid or insufficient permissions"
+            echo "aws-valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
       - name: Bootstrap CDK (if needed)
         id: cdk-bootstrap
         run: |
           cd infra
           
-          # Check if CDK is already bootstrapped using the GitHub variable
-          if [ "${{ vars.CDK_BOOTSTRAPPED }}" = "true" ]; then
-            echo "CDK already bootstrapped (based on CDK_BOOTSTRAPPED variable)"
-            echo "bootstrapped=true" >> $GITHUB_OUTPUT
-          else
-            echo "CDK_BOOTSTRAPPED is false or not set, checking bootstrap status..."
-            
-            # Check if CDK is actually bootstrapped by trying to list stacks
-            if npx cdk list --all 2>/dev/null; then
-              echo "CDK is already bootstrapped (verified with cdk list)"
-              echo "bootstrapped=true" >> $GITHUB_OUTPUT
-              
-              # Try to update the GitHub variable for future runs (may fail due to permissions)
-              echo "Attempting to update CDK_BOOTSTRAPPED variable to true..."
-              gh variable set CDK_BOOTSTRAPPED --body "true" || echo "⚠️ Could not update CDK_BOOTSTRAPPED variable (permissions issue). Continuing anyway."
-            else
-              echo "CDK not bootstrapped. Bootstrapping now..."
-              
-              # Bootstrap CDK
-              npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
-              
-              # Verify bootstrap succeeded
-              if npx cdk list --all 2>/dev/null; then
-                echo "CDK bootstrap successful"
-                echo "bootstrapped=true" >> $GITHUB_OUTPUT
-                
-                # Try to update the GitHub variable (may fail due to permissions)
-                echo "Attempting to update CDK_BOOTSTRAPPED variable to true..."
-                gh variable set CDK_BOOTSTRAPPED --body "true" || echo "⚠️ Could not update CDK_BOOTSTRAPPED variable (permissions issue). Continuing anyway."
-              else
-                echo "ERROR: CDK bootstrap failed"
-                echo "bootstrapped=false" >> $GITHUB_OUTPUT
-                exit 1
-              fi
-            fi
-          fi
+          echo "=========================================="
+          echo "🚀 CDK Bootstrap Automation - IMPROVED VERSION"
+          echo "=========================================="
+          echo "AWS Account: ${{ secrets.AWS_ACCOUNT_ID }}"
+          echo "AWS Region: ${{ env.AWS_REGION }}"
+          echo "=========================================="
+          
+          # Make the bootstrap script executable
+          chmod +x bootstrap-check.sh
+          
+          # Run the improved bootstrap verification
+          ./bootstrap-check.sh
+          
+          # Set output to indicate bootstrap is complete
+          echo "bootstrapped=true" >> $GITHUB_OUTPUT
+          echo "bootstrap_status=verified_and_ready" >> $GITHUB_OUTPUT
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ CDK BOOTSTRAP VERIFICATION COMPLETE"
+          echo "=========================================="
+          echo "The CDK bootstrap bucket has been verified to exist."
+          echo "CDK deployment can now proceed."
+          echo "=========================================="
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
