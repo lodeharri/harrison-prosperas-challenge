@@ -367,7 +367,7 @@ class ComputeStack(Stack):
             ),
             health_check_configuration=apprunner.CfnService.HealthCheckConfigurationProperty(
                 path="/health",
-                protocol="HTTPS",
+                protocol="HTTP",  # App Runner only supports HTTP or TCP for health checks
                 interval=10,
                 timeout=5,
                 healthy_threshold=2,
