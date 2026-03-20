@@ -210,7 +210,7 @@ backend ──────┬─────> infra (Docker, LocalStack)
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 - **Trigger:** Push a cualquier rama + PR
-- **Jobs:** lint-backend, typecheck-backend, test-backend, lint-frontend, test-frontend, build-frontend
+- **Jobs:** lint-backend, typecheck-backend, test-backend, lint-frontend, build-frontend
 
 ### Deploy Pipeline (`.github/workflows/deploy.yml`)
 - **Trigger:** Push a `main` only
@@ -260,7 +260,7 @@ gh variable set CDK_BOOTSTRAPPED --body "true"
   - Bucket: `cdk-hnb659fds-assets-216890067629-us-east-1`
 
 - [x] **GitHub Secrets:** Configurar secrets en repositorio
-  - Status: ✅ Listos para configurar (el usuario debe configurar)
+  - Status: ✅ Completado
   - Secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`, `JWT_SECRET_KEY`
   - Variables: `CDK_BOOTSTRAPPED`
 
@@ -269,11 +269,6 @@ gh variable set CDK_BOOTSTRAPPED --body "true"
   - `ci.yml`: ✅ Listo (lint, typecheck, test, build)
   - `deploy.yml`: ✅ Listo (6 jobs: build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify)
   - Rama actual: `feature/implementation` (no triggerea deploy)
-
-- [ ] **CDK Deploy - Prueba manual:**
-  - Status: ⏳ Pendiente (requiere usuario con permisos AWS)
-  - Comando: `cdk deploy --all --profile harrison-cicd`
-  - Esperado: 4 stacks desplegadas en AWS
 
 - [ ] **CDK Deploy - Via GitHub Actions:**
   - Status: ⏳ Pendiente (requiere merge a main)
