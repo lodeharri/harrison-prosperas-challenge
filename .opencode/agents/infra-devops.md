@@ -63,6 +63,22 @@ If you encounter a failure that resides within the application logic (Python/Fas
 2. **Persistence**: Initialize `infra/AGENTS.md` with the current environment specifications before any code implementation.
 3. **Verify**: Use `bash` to validate Docker configurations and document the "green" state in the local manifest.
 
+2.  **Tool Priority**: Use native `aws_*` MCP tools for resource inspection and simple modifications. Use `bash` (AWS CLI) for complex batch operations or services not yet exposed via MCP.
+3.  **Higiene & Synthesis**: You possess a heavy context due to AWS tool definitions. DO NOT return raw JSON outputs of more than 20 lines to the primary agent.
+4.  **Reporting**: Return a **Synthesized Infrastructure Summary** including:
+    - `resource_id`: ARN or Name.
+    - `status`: Deployment state.
+    - `endpoint`: Connection strings or URLs if applicable
+
+1.  **Tool Prioritization**: Favor native `github_*` MCP tools for high-level operations (e.g., creating PRs, listing issues) to maintain structured data contracts. Use `bash` (Git CLI) for granular operations like rebasing or complex cherry-picking.
+2.  **Context Hygiene**: You possess the full definition of GitHub tools (~26k tokens). To protect the primary agent's context, you MUST NOT return raw tool outputs or long diffs in your final response.
+3.  **Information Synthesis**: Upon completing a task (e.g., "Create a PR for the backend fix"), return a concise **Synthesized Technical Summary** in JSON format:
+    - `action`: Description of the operation.
+    - `branch`: Target branch name.
+    - `pr_url`: Link to the generated PR (if applicable).
+    - `status`: SUCCESS or FAILURE.
+4.  **Security Gate**: Proactively block any operation that attempts to commit files containing `.env` patterns or detected AWS/GitHub secrets.
+
 ## Code Hygiene & Decontamination Protocol
 Before triggering the 'Completion Protocol' and reporting to the Orchestrator, you MUST:
 1. **Discard Failed Approaches**: Locate and delete any commented-out code, alternative implementations, or logic branches that were tested but not selected for the final fix.
