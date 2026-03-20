@@ -247,6 +247,25 @@ gh variable set CDK_BOOTSTRAPPED --body "true"
 
 ---
 
+## 🐛 Problemas Conocidos y Soluciones
+
+### Error: `ecr_assets.DockerImageAsset` en GitHub Actions (RESUELTO)
+
+**Síntoma:** El workflow `deploy.yml` fallaba durante `cdk synth` o `cdk deploy`.
+
+**Causa:** El código original en `infra/stacks/compute_stack.py` usaba `ecr_assets.DockerImageAsset` que intenta construir imágenes Docker localmente. Los runners de GitHub Actions (`ubuntu-latest`) no tienen Docker instalado.
+
+**Solución:** 
+- Eliminar `DockerImageAsset` y usar `ecr_repository.repository_uri` con tag dinámico
+- El tag de imagen se pasa a CDK como contexto: `-c imageTag=$TAG`
+- El ECR repo se crea en el workflow antes del build (manejando first deploy)
+
+**Archivos modificados:**
+- `infra/stacks/compute_stack.py`: Usa `repository_uri:imageTag` en lugar de `DockerImageAsset`
+- `.github/workflows/deploy.yml`: Crea ECR repo + pasa `imageTag` como contexto CDK
+
+---
+
 ## 🔬 Pruebas Pendientes
 
 ### Testing Checklist
