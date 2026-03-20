@@ -488,19 +488,39 @@ jobs:
         id: cdk-bootstrap
         run: |
           cd infra
-          
-          echo "=========================================="
-          echo "🚀 CDK Bootstrap Automation - IMPROVED VERSION"
-          echo "=========================================="
-          echo "AWS Account: ${{ secrets.AWS_ACCOUNT_ID }}"
-          echo "AWS Region: ${{ env.AWS_REGION }}"
-          echo "=========================================="
-          
-          # Make the bootstrap script executable
           chmod +x bootstrap-check.sh
-          
-          # Run the improved bootstrap verification
           ./bootstrap-check.sh
+
+      - name: Clean up orphaned resources (if any)
+        id: cleanup-orphaned
+        run: |
+          echo "🔧 Checking for orphaned resources from previous failed deployments..."
+          
+          # Check for existing ECR repository
+          if aws ecr describe-repositories --repository-names "${{ env.ECR_REPOSITORY }}" 2>/dev/null; then
+            echo "⚠️ ECR repository '${{ env.ECR_REPOSITORY }}' already exists"
+            echo "This is normal if this is not the first deployment."
+          else
+            echo "✅ No orphaned ECR repository found"
+          fi
+          
+          # Check for existing S3 bucket
+          if aws s3 ls "s3://${{ env.FRONTEND_BUCKET }}" 2>/dev/null; then
+            echo "⚠️ S3 bucket '${{ env.FRONTEND_BUCKET }}' already exists"
+            echo "This is normal if this is not the first deployment."
+          else
+            echo "✅ No orphaned S3 bucket found"
+          fi
+          
+          # List CloudFormation stacks to check for failed ones
+          echo "📋 Listing CloudFormation stacks..."
+          aws cloudformation list-stacks --stack-status-filter \
+            CREATE_FAILED \
+            ROLLBACK_FAILED \
+            DELETE_FAILED \
+            UPDATE_ROLLBACK_FAILED \
+            --query "StackSummaries[?contains(StackName, '${{ env.STACK_PREFIX }}')].StackName" \
+            --output text || echo "No failed stacks found"
           
           # Set output to indicate bootstrap is complete
           echo "bootstrapped=true" >> $GITHUB_OUTPUT
@@ -518,11 +538,49 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy CDK stacks
+        id: deploy-stacks
         run: |
           cd infra
-          # Pass imageTag context to CDK for ECR image reference
+          
+          echo "🚀 Deploying CDK stacks..."
+          echo "Image tag: ${{ needs.build-ecr.outputs.image-tag }}"
+          
+          # Try to deploy all stacks
+          # If deployment fails due to existing resources, try to import them
           npx cdk deploy --all --require-approval never --concurrency 3 \
-            -c imageTag=${{ needs.build-ecr.outputs.image-tag }}
+            -c imageTag=${{ needs.build-ecr.outputs.image-tag }} || {
+              
+              echo "⚠️ First deployment attempt failed, checking for existing resources..."
+              
+              # Check which stacks failed
+              FAILED_STACKS=$(aws cloudformation list-stacks --stack-status-filter \
+                CREATE_FAILED \
+                ROLLBACK_FAILED \
+                DELETE_FAILED \
+                UPDATE_ROLLBACK_FAILED \
+                --query "StackSummaries[?contains(StackName, '${{ env.STACK_PREFIX }}')].StackName" \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$FAILED_STACKS" ]; then
+                echo "Found failed stacks: $FAILED_STACKS"
+                echo "Attempting to delete failed stacks..."
+                
+                for stack in $FAILED_STACKS; do
+                  echo "Deleting stack: $stack"
+                  aws cloudformation delete-stack --stack-name "$stack" || true
+                  # Wait for deletion
+                  aws cloudformation wait stack-delete-complete --stack-name "$stack" || true
+                done
+                
+                echo "Retrying deployment..."
+                # Retry deployment
+                npx cdk deploy --all --require-approval never --concurrency 3 \
+                  -c imageTag=${{ needs.build-ecr.outputs.image-tag }}
+              else
+                echo "❌ Deployment failed and no failed stacks found to clean up"
+                exit 1
+              fi
+            }
         env:
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           IMAGE_TAG: ${{ needs.build-ecr.outputs.image-tag }}
