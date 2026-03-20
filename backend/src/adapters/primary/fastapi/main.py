@@ -7,15 +7,15 @@ and translates them to use cases.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
-from starlette.websockets import WebSocket as StarletteWebSocket
+from starlette import status
 
 from backend.src.adapters.primary.fastapi.routes import (
     auth_router,
@@ -61,7 +61,7 @@ router = APIRouter()
 class WebSocketCORSMiddleware(BaseHTTPMiddleware):
     """
     Middleware to allow WebSocket connections from any origin.
-    
+
     WebSocket connections use an HTTP upgrade mechanism. This middleware
     simply passes through WebSocket upgrade requests without modification,
     allowing the WebSocket endpoint to handle the connection.

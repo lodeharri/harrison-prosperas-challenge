@@ -1,6 +1,6 @@
 """Internal endpoint for worker to send WebSocket notifications."""
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from backend.src.services.websocket_manager import get_ws_manager
