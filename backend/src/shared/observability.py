@@ -5,6 +5,7 @@ This module provides CloudWatch integration for:
 - Structured logging to CloudWatch Logs
 """
 
+import io
 from typing import Any
 
 import boto3
@@ -90,6 +91,8 @@ def setup_cloudwatch_logging() -> Any:
         )
 
         # Configure structlog with CloudWatch handler
+        # Use StringIO buffer for structlog output, which watchtower will capture
+        log_buffer = io.StringIO()
         configure(
             processors=[
                 structlog.processors.TimeStamper(fmt="iso"),
@@ -98,7 +101,7 @@ def setup_cloudwatch_logging() -> Any:
             ],
             wrapper_class=make_filtering_bound_logger(logging.INFO),
             context_class=dict,
-            logger_factory=structlog.PrintLoggerFactory(file=cw_handler.stream),
+            logger_factory=structlog.PrintLoggerFactory(file=log_buffer),
         )
 
         return cw_handler

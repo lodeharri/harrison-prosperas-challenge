@@ -475,14 +475,18 @@ class DynamoDBJobRepository(JobRepository):
         Returns:
             Job entity
         """
-        # Parse datetime fields
-        created_at = item.get("created_at")
-        if isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        # Parse datetime fields - these are required fields in DynamoDB
+        created_at_raw = item.get("created_at")
+        if isinstance(created_at_raw, str):
+            created_at = datetime.fromisoformat(created_at_raw.replace("Z", "+00:00"))
+        else:
+            raise ValueError(f"created_at is required for job {item.get('job_id')}")
 
-        updated_at = item.get("updated_at")
-        if isinstance(updated_at, str):
-            updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        updated_at_raw = item.get("updated_at")
+        if isinstance(updated_at_raw, str):
+            updated_at = datetime.fromisoformat(updated_at_raw.replace("Z", "+00:00"))
+        else:
+            raise ValueError(f"updated_at is required for job {item.get('job_id')}")
 
         return Job(
             job_id=item["job_id"],
