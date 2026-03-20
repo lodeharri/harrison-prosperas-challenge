@@ -1,0 +1,137 @@
+{
+  "/harrison-compute-stack": [
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "Project",
+          "value": "RetoProsperas"
+        }
+      ]
+    }
+  ],
+  "/harrison-compute-stack/ECRRepositoryUri": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ECRRepositoryUri"
+    }
+  ],
+  "/harrison-compute-stack/JWTSecretArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JWTSecretArn"
+    }
+  ],
+  "/harrison-compute-stack/APIService": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIService"
+    }
+  ],
+  "/harrison-compute-stack/APIAutoScaling": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIAutoScaling"
+    }
+  ],
+  "/harrison-compute-stack/APIServiceUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIServiceUrl"
+    }
+  ],
+  "/harrison-compute-stack/WorkerService": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerService"
+    }
+  ],
+  "/harrison-compute-stack/WorkerServiceUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerServiceUrl"
+    }
+  ],
+  "/harrison-compute-stack/ECRRepositoryName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ECRRepositoryName"
+    }
+  ],
+  "/harrison-compute-stack/APIRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIRoleArn"
+    }
+  ],
+  "/harrison-compute-stack/WorkerRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerRoleArn"
+    }
+  ],
+  "/harrison-compute-stack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/harrison-compute-stack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/harrison-compute-stack/ECRRepository/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ECRRepositoryF3A3832E"
+    }
+  ],
+  "/harrison-compute-stack/JWTSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JWTSecretF6F1CBF0"
+    }
+  ],
+  "/harrison-compute-stack/APIServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIServiceRole837A8066"
+    }
+  ],
+  "/harrison-compute-stack/WorkerServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerServiceRoleE890FB7B"
+    }
+  ],
+  "/harrison-compute-stack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ],
+  "/harrison-compute-stack/Exports/Output{\"Fn::GetAtt\":[\"APIService\",\"ServiceUrl\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttAPIServiceServiceUrlAF97AB89"
+    }
+  ],
+  "/harrison-compute-stack/APIServiceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIServiceRoleDefaultPolicyF6D99B67"
+    }
+  ],
+  "/harrison-compute-stack/WorkerServiceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "WorkerServiceRoleDefaultPolicyAC0B0B2D"
+    }
+  ]
+}

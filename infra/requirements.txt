@@ -1,0 +1,14 @@
+# Reto Prosperas - CDK Dependencies
+# AWS Cloud Development Kit (CDK) v2
+
+# Core CDK library
+aws-cdk-lib>=2.150.0
+
+# AWS Construct Library
+constructs>=10.4.0
+
+# CDK Nag for best practices
+cdk-nag>=2.12.0
+
+# For Python type checking
+typing-extensions>=4.0.0

@@ -1,0 +1,18 @@
+{
+  "app": "python3 app.py",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "*.pyc",
+      "__pycache__",
+      ".gitignore"
+    ]
+  },
+  "context": {
+    "stackPrefix": "harrison",
+    "environment": "production",
+    "jwtSecretName": "harrison-jwt-secret"
+  }
+}

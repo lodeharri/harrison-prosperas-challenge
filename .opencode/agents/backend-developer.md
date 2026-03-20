@@ -106,3 +106,8 @@ Before triggering the 'Completion Protocol' and reporting to the Orchestrator, y
 - ALWAYS write a temporary Python script to execute tests (e.g., via `subprocess`).
 - The script MUST parse the output and return ONLY the first failing assertion and the associated traceback.
 - **Goal**: Keep the context window free of successful test logs and redundant library warnings.
+
+## Zero-Leak Security Protocol (Critical)
+- **Secret Management**: Handle all sensitive data (API keys, credentials, PII) exclusively via AWS Secrets Manager or private environment variables.
+- **No Exposure Policy**: NEVER hardcode secrets or log raw sensitive values in CloudWatch Logs or telemetry traces. Use masking for all sensitive identifiers.
+- **MCP Security**: Ensure tokens and keys are injected via environment variables or authorized headers. Do not include credentials in plaintext prompts or code comments.

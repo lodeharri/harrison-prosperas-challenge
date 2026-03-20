@@ -1,0 +1,201 @@
+{
+  "/harrison-data-stack": [
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "Project",
+          "value": "RetoProsperas"
+        }
+      ]
+    }
+  ],
+  "/harrison-data-stack/JobsTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "JobsTable1970BC16"
+      }
+    }
+  ],
+  "/harrison-data-stack/IdempotencyTable": [
+    {
+      "type": "aws:cdk:hasPhysicalName",
+      "data": {
+        "Ref": "IdempotencyTable22A5A209"
+      }
+    }
+  ],
+  "/harrison-data-stack/DLQArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DLQArn"
+    }
+  ],
+  "/harrison-data-stack/JobQueueArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobQueueArn"
+    }
+  ],
+  "/harrison-data-stack/JobQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobQueueUrl"
+    }
+  ],
+  "/harrison-data-stack/PriorityQueueArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PriorityQueueArn"
+    }
+  ],
+  "/harrison-data-stack/PriorityQueueUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PriorityQueueUrl"
+    }
+  ],
+  "/harrison-data-stack/JobsTableArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsTableArn"
+    }
+  ],
+  "/harrison-data-stack/JobsTableName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsTableName"
+    }
+  ],
+  "/harrison-data-stack/IdempotencyTableArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "IdempotencyTableArn"
+    }
+  ],
+  "/harrison-data-stack/IdempotencyTableName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "IdempotencyTableName"
+    }
+  ],
+  "/harrison-data-stack/DLQUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DLQUrl"
+    }
+  ],
+  "/harrison-data-stack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/harrison-data-stack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/harrison-data-stack/JobsTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsTable1970BC16"
+    }
+  ],
+  "/harrison-data-stack/IdempotencyTable/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "IdempotencyTable22A5A209"
+    }
+  ],
+  "/harrison-data-stack/JobsDLQ/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsDLQB327C2F8"
+    }
+  ],
+  "/harrison-data-stack/JobsQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsQueue86ED6666"
+    }
+  ],
+  "/harrison-data-stack/JobsPriorityQueue/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "JobsPriorityQueue8D57FD0A"
+    }
+  ],
+  "/harrison-data-stack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Fn::GetAtt\":[\"JobsTable1970BC16\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttJobsTable1970BC16ArnC40C1624"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Fn::GetAtt\":[\"IdempotencyTable22A5A209\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Fn::GetAtt\":[\"JobsQueue86ED6666\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttJobsQueue86ED6666ArnE154B711"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Fn::GetAtt\":[\"JobsPriorityQueue8D57FD0A\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttJobsPriorityQueue8D57FD0AArn39195E91"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Fn::GetAtt\":[\"JobsDLQB327C2F8\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttJobsDLQB327C2F8Arn00C118E1"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Ref\":\"JobsTable1970BC16\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefJobsTable1970BC16EDB4A824"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Ref\":\"IdempotencyTable22A5A209\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefIdempotencyTable22A5A209F6C0179A"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Ref\":\"JobsQueue86ED6666\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefJobsQueue86ED6666E80AB877"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Ref\":\"JobsDLQB327C2F8\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefJobsDLQB327C2F8C785A3F2"
+    }
+  ],
+  "/harrison-data-stack/Exports/Output{\"Ref\":\"JobsPriorityQueue8D57FD0A\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefJobsPriorityQueue8D57FD0AA5EF90C1"
+    }
+  ]
+}

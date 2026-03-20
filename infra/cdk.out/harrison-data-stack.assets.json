@@ -1,0 +1,21 @@
+{
+  "version": "52.0.0",
+  "files": {
+    "6ca04af35f338dc98156626ac578918ecd277499a8777d0657e6486184b278c8": {
+      "displayName": "harrison-data-stack Template",
+      "source": {
+        "path": "harrison-data-stack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "216890067629-us-east-1-c8957316": {
+          "bucketName": "cdk-hnb659fds-assets-216890067629-us-east-1",
+          "objectKey": "6ca04af35f338dc98156626ac578918ecd277499a8777d0657e6486184b278c8.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::216890067629:role/cdk-hnb659fds-file-publishing-role-216890067629-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

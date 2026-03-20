@@ -1,0 +1,21 @@
+{
+  "version": "52.0.0",
+  "files": {
+    "9f0537c45cb1d73526070e1856a1d6b12dd97d52036ce9685b1f4ffcc5c0ac47": {
+      "displayName": "harrison-api-stack Template",
+      "source": {
+        "path": "harrison-api-stack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "216890067629-us-east-1-0f3123db": {
+          "bucketName": "cdk-hnb659fds-assets-216890067629-us-east-1",
+          "objectKey": "9f0537c45cb1d73526070e1856a1d6b12dd97d52036ce9685b1f4ffcc5c0ac47.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::216890067629:role/cdk-hnb659fds-file-publishing-role-216890067629-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

@@ -71,6 +71,38 @@
 **10. Senior Bonus Challenge**
 * **B3 — Real-time notifications:** Replace traditional frontend polling with a push strategy, such as WebSockets or another similar mechanism. [x]Configure the application so that the server proactively notifies the frontend whenever a job's status changes.
 
+
+
+**Phase 2: Infrastructure as Code (AWS CDK) - Base Resources**
+*Goal: Define cloud persistence and messaging deterministically.*
+1. **CDK Initialization:** Create an AWS CDK project (use Python) inside the `infra/` directory.
+2. **DynamoDB:** Define a table for the Jobs. Set the billing mode to `PAY_PER_REQUEST` (On-Demand) to keep it within the Free Tier and define `job_id` as the Partition Key.
+3. **Amazon SQS:** Define a standard SQS queue to process the reports. Configure a Dead Letter Queue (DLQ) for failed messages.
+4. **Validation:** You must generate the commands for the user to manually run `cdk synth` and `cdk deploy` from their terminal, verifying that the resources are created in their AWS account.
+
+**Phase 3: Infrastructure as Code (AWS CDK) - Compute and Frontend**
+*Goal: Expose the application to the public internet without incurring hidden costs.*
+1. **Backend Compute (Amazon ECS Fargate):** * Create an ECS cluster.
+   * Define a Task Definition using Fargate with the minimum capacity (0.25 vCPU, 0.5GB RAM).
+   * **CRITICAL COST REQUIREMENT:** Deploy the ECS service in **Public Subnets** and assign a Public IP to the tasks. DO NOT use NAT Gateways under any circumstances, as they generate fixed hourly costs.
+   * Create an internet-facing Application Load Balancer (ALB) to expose the API.
+2. **Frontend Hosting (S3 + CloudFront):**
+   * Define a private S3 bucket to host the static React files.
+   * Create an Amazon CloudFront distribution. Use Origin Access Control (OAC) so that CloudFront has secure read permissions over the S3 bucket.
+3. **Permissions (IAM):** Ensure that the execution role of the ECS task has strictly limited permissions (Principle of Least Privilege) to read/write in the specific DynamoDB table and SQS queue.
+
+**Phase 4: CI/CD Automation (GitHub Actions)**
+*Goal: Continuous deployment with zero manual intervention and maximum security.*
+1. **Secure Authentication (OIDC):** Create a separate CDK stack (or provide instructions) to configure an Identity Provider (OIDC) in IAM, allowing GitHub Actions to assume a role in AWS without using long-lived Access Keys.
+2. **Testing Workflow (Pull Request):** Create `.github/workflows/pr-checks.yml` that runs when opening a PR to `main`. It must install dependencies, run linters, and execute automated tests (`pytest` and `npm test`).
+3. **Deployment Workflow (Push to Main):** Create `.github/workflows/deploy.yml` that:
+   * Assumes the AWS role via OIDC.
+   * **Backend:** Builds the Docker image, pushes it to Amazon ECR, and updates the ECS service to force a new deployment.
+   * **Frontend:** Injects the public ALB URL into the React environment (`.env`), runs `npm run build`, syncs the output folder with the S3 bucket using `aws s3 sync --delete`, and invalidates the CloudFront cache.
+4. **Documentation:** Add precise instructions in the `README.md` or `TECHNICAL_DOCS.md` on how a reviewer can test the pipeline and access the public URLs.
+
+
+
 ## Project Status
 - Current Milestone: Scaffolding
 - Last Update: Agentic Orchestrator initialized.

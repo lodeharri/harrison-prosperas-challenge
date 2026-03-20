@@ -1,0 +1,197 @@
+{
+  "/harrison-api-stack": [
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "Project",
+          "value": "RetoProsperas"
+        }
+      ]
+    }
+  ],
+  "/harrison-api-stack/APIGatewayId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayId"
+    }
+  ],
+  "/harrison-api-stack/APIGatewayRootResourceId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayRootResourceId"
+    }
+  ],
+  "/harrison-api-stack/UsagePlanId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "UsagePlanId"
+    }
+  ],
+  "/harrison-api-stack/APIKeyId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIKeyId"
+    }
+  ],
+  "/harrison-api-stack/APIGatewayEndpoint": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayEndpoint"
+    }
+  ],
+  "/harrison-api-stack/APIUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIUrl"
+    }
+  ],
+  "/harrison-api-stack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/harrison-api-stack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGateway71B6BBE0"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Account": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayAccount871F0E99"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Endpoint": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayEndpoint038C57B1"
+    }
+  ],
+  "/harrison-api-stack/UsagePlan/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "UsagePlanC18B28F1"
+    }
+  ],
+  "/harrison-api-stack/UsagePlan/UsagePlanKeyResource:harrisonapistackAPIKey34BCD4A5": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "UsagePlanUsagePlanKeyResourceharrisonapistackAPIKey34BCD4A5A486D3BC"
+    }
+  ],
+  "/harrison-api-stack/APIKey/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIKeyF5CDB6B6"
+    }
+  ],
+  "/harrison-api-stack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/CloudWatchRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayCloudWatchRole4835D6D9"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Deployment/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayDeploymentF0E5ED0Abf12a86783e8aa4b56f0f9a7373db7f7"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/DeploymentStage.prod/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayDeploymentStageprod9BCCD7C3"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/auth/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayauthA48CE7EB"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/jobs/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayjobs4F88D5E6"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/health/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayhealth2D99D32D"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/ws/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewaywsC5F80311"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/auth/POST/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayauthPOST41ECA693"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/jobs/GET/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayjobsGETB1540583"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/jobs/POST/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayjobsPOSTF2BB42D8"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/jobs/{job_id}/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayjobsjobid74553655"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/health/GET/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayhealthGETD928B492"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/ws/jobs/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewaywsjobsBD52631F"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/jobs/{job_id}/GET/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewayjobsjobidGET807A348A"
+    }
+  ],
+  "/harrison-api-stack/APIGateway/Default/ws/jobs/{user_id}/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "APIGatewaywsjobsuserid42A7B0C4"
+    }
+  ]
+}

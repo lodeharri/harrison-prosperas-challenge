@@ -1,0 +1,147 @@
+{
+  "/harrison-cdn-stack": [
+    {
+      "type": "aws:cdk:stack-tags",
+      "data": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "Project",
+          "value": "RetoProsperas"
+        }
+      ]
+    }
+  ],
+  "/harrison-cdn-stack/FrontendBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBucketName"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendBucketArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBucketArn"
+    }
+  ],
+  "/harrison-cdn-stack/OriginAccessIdentityId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "OriginAccessIdentityId"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendDistribution": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendDistribution"
+    }
+  ],
+  "/harrison-cdn-stack/DistributionId": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DistributionId"
+    }
+  ],
+  "/harrison-cdn-stack/DistributionDomainName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DistributionDomainName"
+    }
+  ],
+  "/harrison-cdn-stack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C": [
+    {
+      "type": "aws:cdk:is-custom-resource-handler-singleton",
+      "data": true
+    },
+    {
+      "type": "aws:cdk:is-custom-resource-handler-runtime-family",
+      "data": 2
+    }
+  ],
+  "/harrison-cdn-stack/FrontendBucketWebsiteUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBucketWebsiteUrl"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendUrl"
+    }
+  ],
+  "/harrison-cdn-stack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    }
+  ],
+  "/harrison-cdn-stack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBucketEFE2E19C"
+    }
+  ],
+  "/harrison-cdn-stack/OriginAccessIdentity/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "OriginAccessIdentityDF1E3CAC"
+    }
+  ],
+  "/harrison-cdn-stack/SPARoutingFunction/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SPARoutingFunction438EFE06"
+    }
+  ],
+  "/harrison-cdn-stack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C81C01536"
+    }
+  ],
+  "/harrison-cdn-stack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendBucket/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendBucketPolicy1DFF75D9"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendDeployment/AwsCliLayer/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendDeploymentAwsCliLayer77737BA0"
+    }
+  ],
+  "/harrison-cdn-stack/FrontendDeployment/CustomResource/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "FrontendDeploymentCustomResource068A52DB"
+    }
+  ],
+  "/harrison-cdn-stack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265"
+    }
+  ],
+  "/harrison-cdn-stack/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRoleDefaultPolicy88902FDF"
+    }
+  ]
+}
