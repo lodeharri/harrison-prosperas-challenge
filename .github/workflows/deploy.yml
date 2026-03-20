@@ -54,7 +54,7 @@ permissions:
   contents: read
   actions: read
   # Additional permissions needed for GitHub CLI operations
-  variables: write  # For updating CDK_BOOTSTRAPPED variable
+  # Note: variables permission is not standard - we'll use GitHub CLI with token
   pull-requests: write  # For deployment summaries
 
 jobs:
