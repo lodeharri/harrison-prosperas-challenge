@@ -3,7 +3,7 @@
 **Module:** AWS CDK Infrastructure & DevOps  
 **Directory:** `/home/harri/development/projects/harrison-prosperas-challenge/infra`  
 **Skill:** `cicd-aws-production`  
-**Status:** ✅ CDK v2 API FIXED - SYNTH SUCCESS - GITHUB ACTIONS READY - DEPLOY FROM SCRATCH READY
+**Status:** ✅ CDK v2 READY - AUTO-BOOTSTRAP IMPLEMENTED - COMPLETELY PORTABLE - DEPLOY FROM SCRATCH READY
 
 ---
 
@@ -138,7 +138,7 @@ aws apigateway get-rest-apis
 ### Prerequisites
 
 ```bash
-# 1. Install CDK
+# 1. Install CDK (for local development only)
 npm install -g aws-cdk
 
 # 2. Set AWS credentials
@@ -146,7 +146,7 @@ export AWS_ACCESS_KEY_ID="your-key"
 export AWS_SECRET_ACCESS_KEY="your-secret"
 export AWS_DEFAULT_REGION="us-east-1"
 
-# 3. Bootstrap environment (one-time)
+# 3. Bootstrap environment (one-time - OR use auto-bootstrap in GitHub Actions)
 cdk bootstrap aws://ACCOUNT/REGION
 
 # 4. Deploy all stacks
@@ -242,7 +242,55 @@ environment={
 Same as API + `SQS_DLQ_URL` for sending failed messages.
 
 ---
+## 🚀 Auto-Bootstrap in GitHub Actions
 
+### Overview
+The `deploy.yml` workflow includes intelligent CDK bootstrap automation that makes deployment completely portable across any AWS account.
+
+### How It Works
+1. **Detection Phase**: Checks if CDK is already bootstrapped using:
+   - CloudFormation `CDKToolkit` stack existence
+   - S3 bootstrap bucket (`cdk-hnb659fds-assets-*`)
+   - `cdk list` command success
+   - GitHub `CDK_BOOTSTRAPPED` variable
+
+2. **Bootstrap Phase**: If not bootstrapped:
+   - Runs `cdk bootstrap aws://{account}/{region}` with retry logic
+   - Verifies bootstrap succeeded
+   - Updates `CDK_BOOTSTRAPPED` variable to `"true"`
+
+3. **Deployment Phase**: Proceeds with normal CDK deployment
+
+### No Manual Commands Needed
+Users only need to:
+1. Configure GitHub Secrets (AWS credentials, account ID, JWT secret)
+2. Run the workflow
+3. Everything else happens automatically
+
+### Bootstrap Permissions Required
+The AWS credentials need these permissions (or AdministratorAccess):
+- **CloudFormation**: Full access
+- **S3**: CreateBucket, PutObject, ListBucket
+- **IAM**: CreateRole, AttachRolePolicy, PassRole
+- **EC2/ECR**: Basic permissions
+
+### First-Time Deployment Flow
+```
+New AWS Account → Configure Secrets → Run Workflow → [Auto-detect] → [Auto-bootstrap] → Complete Deployment
+```
+
+### Verification Commands
+```bash
+# Check bootstrap status manually
+aws cloudformation describe-stacks --stack-name CDKToolkit
+aws s3 ls | grep cdk-hnb659fds-assets
+
+# Manual bootstrap (if needed)
+cd infra
+npx cdk bootstrap aws://YOUR_ACCOUNT_ID/us-east-1
+```
+
+---
 ## Deployment Commands
 
 ```bash

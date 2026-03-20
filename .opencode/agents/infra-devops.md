@@ -85,3 +85,4 @@ Before triggering the 'Completion Protocol' and reporting to the Orchestrator, y
 2. **Import Tree Pruning**: Execute a static analysis (or manual check) to identify and remove any `import` statements (Python) or `dependencies` (React/Node) that are no longer used by the final logic.
 3. **Dead Code Elimination**: Remove all temporary `print()`, `console.log()`, or debugging placeholders used during the task.
 4. **Final Linting**: If the project `AGENTS.md` defines a lint command (e.g., `pnpm lint` or `ruff check`), you MUST run it and fix all violations before exiting.
+5. **Never**: NEVER create new files to report information, you have to make a summary and return just the needed information.
