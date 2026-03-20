@@ -270,11 +270,11 @@ gh variable set CDK_BOOTSTRAPPED --body "true"
   - `deploy.yml`: ✅ Listo (6 jobs: build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify)
   - Rama actual: `feature/implementation` (no triggerea deploy)
 
-- [ ] **CDK Deploy - Via GitHub Actions:**
-  - Status: ⏳ Pendiente (requiere merge a main)
-  - Trigger: Merge a main
+- [x] **CDK Deploy - Via GitHub Actions:**
+  - Status: ✅ PR Creado
+  - PR: https://github.com/lodeharri/harrison-prosperas-challenge/pull/1
+  - Trigger: Merge a `master`
   - Flujo: build-ecr → cdk-synth → build-frontend → deploy-cdk → deploy-frontend → verify
-  - PR necesario: Crear PR de `feature/implementation` → `main`
 
 - [ ] **Verificación final:**
   - Status: ⏳ Pendiente (post-deploy)
