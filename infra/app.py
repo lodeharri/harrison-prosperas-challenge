@@ -31,7 +31,7 @@ from stacks.api_stack import APIStack
 from stacks.cdn_stack import CDNStack
 
 
-def get_environment_context() -> cdk.Environment:
+def get_environment_context(app: cdk.App) -> cdk.Environment:
     """
     Get AWS environment from context or environment variables.
 
@@ -40,8 +40,6 @@ def get_environment_context() -> cdk.Environment:
     2. Environment variables (CDK_ACCOUNT, CDK_REGION)
     3. Defaults for local development
     """
-    app = cdk.App()
-
     # Use provided account or default to CDK_DEFAULT_ACCOUNT if available,
     # otherwise use placeholder for synthesis only
     account = os.environ.get(
@@ -68,7 +66,7 @@ def synth_app() -> cdk.App:
     app = cdk.App()
 
     # Environment configuration
-    env = get_environment_context()
+    env = get_environment_context(app)
 
     # Stack naming prefix
     stack_prefix = app.node.try_get_context("stackPrefix") or "harrison"

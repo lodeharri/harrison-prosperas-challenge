@@ -128,8 +128,9 @@ aws apigateway get-rest-apis
 
 ### Environment Configuration (app.py)
 
-**Fix Applied:**
-- Added default account (`123456789012`) for `cdk synth` when `CDK_ACCOUNT` is not set
+**Fixes Applied:**
+1. **Default Account:** Added default account (`123456789012`) for `cdk synth` when `CDK_ACCOUNT` is not set
+2. **Bootstrap Authentication:** Fixed `get_environment_context()` function to accept `app` parameter instead of creating a new app instance, resolving the "Unable to resolve AWS account" error during bootstrap
 
 ---
 
