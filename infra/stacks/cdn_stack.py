@@ -190,7 +190,7 @@ class CDNStack(Stack):
             distribution_config=cloudfront.CfnDistribution.DistributionConfigProperty(
                 enabled=True,
                 comment=f"CloudFront distribution for {self.stack_prefix} frontend",
-                price_class=cloudfront.PriceClass.PRICE_CLASS_100.value,  # NA + EU
+                price_class="PriceClass_100",  # NA + EU - CloudFront expects this exact string
                 http_version="http2and3",
                 default_root_object="index.html",
                 viewer_certificate=cloudfront.CfnDistribution.ViewerCertificateProperty(
@@ -212,7 +212,7 @@ class CDNStack(Stack):
                 ],
                 default_cache_behavior=cloudfront.CfnDistribution.DefaultCacheBehaviorProperty(
                     target_origin_id="frontend",
-                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS.value,
+                    viewer_protocol_policy="redirect-to-https",  # CloudFront expects this exact string
                     compress=True,
                     allowed_methods=["GET", "HEAD", "OPTIONS"],
                     cached_methods=["GET", "HEAD", "OPTIONS"],
