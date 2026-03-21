@@ -112,6 +112,27 @@ run_awslocal dynamodb update-time-to-live \
         "AttributeName": "ttl"
     }' 2>/dev/null || echo "TTL configuration may have failed (optional)"
 
+# Idempotency keys table for preventing duplicate job submissions
+echo "Creating idempotency_keys table..."
+run_awslocal dynamodb create-table \
+    --table-name idempotency_keys \
+    --attribute-definitions \
+        AttributeName=idempotency_key,AttributeType=S \
+    --key-schema \
+        AttributeName=idempotency_key,KeyType=HASH \
+    --provisioned-throughput \
+        ReadCapacityUnits=5,WriteCapacityUnits=5 \
+    2>/dev/null || echo "Table idempotency_keys may already exist"
+
+# Enable TTL on idempotency_keys table for automatic cleanup (24h TTL)
+echo "Enabling TTL on idempotency_keys table..."
+run_awslocal dynamodb update-time-to-live \
+    --table-name idempotency_keys \
+    --time-to-live-specification '{
+        "Enabled": true,
+        "AttributeName": "expires_at"
+    }' 2>/dev/null || echo "TTL configuration may have failed (optional)"
+
 echo "DynamoDB tables created successfully!"
 
 # =============================================================================
