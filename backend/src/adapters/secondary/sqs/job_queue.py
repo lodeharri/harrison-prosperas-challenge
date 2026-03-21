@@ -195,5 +195,6 @@ class SQSJobQueue(JobQueue):
                 QueueName=self._settings.sqs_queue_name.split("/")[-1]
             )
             return True
-        except ClientError:
+        except ClientError as e:
+            logger.error(f"Silence SQS error: {e}")
             return False

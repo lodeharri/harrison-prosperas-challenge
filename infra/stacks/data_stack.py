@@ -8,8 +8,6 @@ This stack creates the foundational data layer for the job processing system:
 - Priority queue for high-priority jobs
 """
 
-from typing import Dict, Optional
-
 from aws_cdk import (
     CfnOutput,
     Duration,

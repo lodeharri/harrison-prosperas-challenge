@@ -40,7 +40,7 @@ def get_environment_context() -> cdk.Environment:
     2. Environment variables (CDK_ACCOUNT, CDK_REGION)
     3. Defaults for local development
     """
-    app = cdk.App()
+    cdk.App()
 
     # Use provided account or default to CDK_DEFAULT_ACCOUNT if available,
     # otherwise use placeholder for synthesis only
@@ -119,7 +119,7 @@ def synth_app() -> cdk.App:
     # =======================================================================
     # CDN Stack: S3 + CloudFront
     # =======================================================================
-    cdn_stack = CDNStack(
+    CDNStack(
         app,
         f"{stack_prefix}-cdn-stack",
         stack_name=f"{stack_prefix}-cdn-stack",

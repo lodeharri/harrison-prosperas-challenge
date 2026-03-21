@@ -437,7 +437,8 @@ class DynamoDBJobRepository(JobRepository):
                 TableName=self._settings.dynamodb_table_idempotency
             )
             return True
-        except ClientError:
+        except ClientError as e:
+            logger.error(f"Silence SQS error: {e}")
             return False
 
     def _to_dynamodb_item(self, job: Job) -> dict[str, Any]:

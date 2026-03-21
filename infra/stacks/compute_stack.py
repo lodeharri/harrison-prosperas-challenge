@@ -202,6 +202,7 @@ class ComputeStack(Stack):
                     "dynamodb:UpdateItem",
                     "dynamodb:Query",
                     "dynamodb:Scan",
+                    "dynamodb:DescribeTable",
                 ],
                 resources=[
                     self.data_stack.jobs_table.table_arn,
@@ -218,6 +219,7 @@ class ComputeStack(Stack):
                 actions=[
                     "sqs:SendMessage",
                     "sqs:GetQueueUrl",
+                    "sqs:GetQueueAttributes",
                 ],
                 resources=[
                     self.data_stack.job_queue_arn,
@@ -363,9 +365,9 @@ class ComputeStack(Stack):
                 ),
                 container_name="api",
                 container_port=8000,
+                task_role=self.api_role,
                 environment={
                     "AWS_REGION": self.region,
-                    "AWS_ENDPOINT_URL": "",
                     "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
                     "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
                     "SQS_QUEUE_URL": self.data_stack.job_queue_url,
@@ -443,7 +445,7 @@ class ComputeStack(Stack):
         )
 
         # Add container with worker command
-        container = task_definition.add_container(
+        task_definition.add_container(
             "WorkerContainer",
             image=ecs.ContainerImage.from_ecr_repository(
                 repository=self.ecr_repository,
@@ -451,7 +453,6 @@ class ComputeStack(Stack):
             ),
             environment={
                 "AWS_REGION": self.region,
-                "AWS_ENDPOINT_URL": "",  # Empty for real AWS
                 "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
                 "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
                 "SQS_QUEUE_URL": self.data_stack.job_queue_url,

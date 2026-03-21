@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # AWS Configuration
     # =====================================================================
     # AWS_ENDPOINT_URL: If set, use LocalStack. If not set, use native AWS.
-    aws_endpoint_url: str | None = os.getenv("AWS_ENDPOINT_URL")
+    aws_endpoint_url: str | None = os.getenv("AWS_ENDPOINT_URL") or None
     aws_region: str = os.getenv("AWS_REGION", "us-east-1")
     aws_access_key_id: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
