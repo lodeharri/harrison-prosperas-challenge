@@ -18,7 +18,7 @@ harrison-prosperas-challenge/
 │   ├── cdk.json            # CDK configuration
 │   ├── stacks/
 │   │   ├── data_stack.py   # DynamoDB + SQS
-│   │   ├── compute_stack.py # App Runner (API + Worker)
+│   │   ├── compute_stack.py # ECS Fargate (API + Worker)
 │   │   ├── api_stack.py    # API Gateway + Rate Limiting
 │   │   └── cdn_stack.py    # S3 + CloudFront
 │   └── README.md           # CDK deployment guide
@@ -142,19 +142,20 @@ The application automatically detects the environment based on `AWS_ENDPOINT_URL
 | Environment | Status |
 |-------------|--------|
 | Local (Docker) | ✅ Ready |
-| AWS Production | ✅ CDK Synth Working (4 stacks) |
+| AWS Production | ✅ 4 Stacks Deployed |
 
 ---
 
 ## Project Status
-✅ **AWS limpio:** Verificado que no hay recursos existentes (CloudFormation, ECR, S3, CloudFront, DynamoDB, SQS, App Runner, API Gateway).  
+✅ **AWS limpio:** Verificado que no hay recursos existentes (CloudFormation, ECR, S3, CloudFront, DynamoDB, SQS, ECS, API Gateway).  
 ✅ **Workflow mejorado:** `deploy.yml` actualizado con extracción robusta de outputs CDK, generación correcta de WebSocket URL, y actualización automática de CloudFront ID.  
 ✅ **Workflow robusto:** `deploy.yml` actualizado con pre-deployment checks, manejo robusto de errores, health checks mejorados y smoke tests resilientes.  
 ✅ **CDK listo:** 4 stacks sintetizan correctamente (Data, Compute, API, CDN).  
+✅ **CDK desplegado a AWS:** 4 stacks en producción (harrison-data-stack, harrison-compute-stack, harrison-api-stack, harrison-cdn-stack).  
 ✅ **CI/CD operacional:** Pipeline GitHub Actions listo para despliegue desde cero.  
 ✅ **CDK configurado para despliegue desde cero:** Verificación completa pasada (8/8 checks), imports funcionan, dependencias instaladas, configuración válida.  
 ✅ **Verificación local completa:** Docker Compose funciona correctamente, todos los servicios operativos, pruebas de integración exitosas.  
-🚀 **Listo para despliegue:** Configurar variables GitHub y secrets, luego merge a `master` para desplegar.
+✅ **Despliegue a AWS completado:** ECS Fargate, DynamoDB, SQS, API Gateway, CloudFront, S3 todos operativos.
 
 ---
 
@@ -236,7 +237,7 @@ CDK_BOOTSTRAPPED="false"  # Se actualizará automáticamente después del bootst
 | Stack | Recursos AWS | Costo Estimado |
 |-------|--------------|----------------|
 | **Data Stack** | DynamoDB (2 tablas), SQS (3 colas) | ~$0-1/mes |
-| **Compute Stack** | ECR, App Runner (2 servicios), Secrets Manager | ~$5-7/mes |
+| **Compute Stack** | ECR, ECS Fargate (2 servicios), Secrets Manager | ~$5-7/mes |
 | **API Stack** | API Gateway, Rate Limiting, API Key | ~$0-5/mes |
 | **CDN Stack** | S3, CloudFront, OAI | ~$0-1/mes |
 | **TOTAL** | | **~$5-14/mes** |
@@ -292,7 +293,7 @@ Each module has its own detailed AGENTS.md:
 ## Dependencies
 
 ```
-infra ──────> backend (references Dockerfile for App Runner)
+infra ──────> backend (references Dockerfile for ECS)
 backend ──────┬─────> infra (Docker, LocalStack)
               │
               └─────> worker (consumes SQS, updates DynamoDB)
@@ -404,4 +405,4 @@ gh variable set CDK_BOOTSTRAPPED --body "true"
     - [ ] Frontend accesible via CloudFront
     - [ ] DynamoDB tablas creadas
     - [ ] SQS colas activas
-    - [ ] App Runner servicios corriendo
+    - [ ] ECS Fargate servicios corriendo

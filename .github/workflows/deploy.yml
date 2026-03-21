@@ -881,7 +881,7 @@ jobs:
           echo "### 📦 AWS Stacks Deployed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "1. **${{ env.STACK_PREFIX }}-data-stack** - DynamoDB + SQS" >> $GITHUB_STEP_SUMMARY
-          echo "2. **${{ env.STACK_PREFIX }}-compute-stack** - App Runner + ECR" >> $GITHUB_STEP_SUMMARY
+          echo "2. **${{ env.STACK_PREFIX }}-compute-stack** - ECS Fargate + ECR" >> $GITHUB_STEP_SUMMARY
           echo "3. **${{ env.STACK_PREFIX }}-api-stack** - API Gateway + Rate Limiting" >> $GITHUB_STEP_SUMMARY
           echo "4. **${{ env.STACK_PREFIX }}-cdn-stack** - S3 + CloudFront" >> $GITHUB_STEP_SUMMARY
           

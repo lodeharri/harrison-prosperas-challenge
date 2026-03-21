@@ -9,7 +9,7 @@ This directory contains the AWS Cloud Development Kit (CDK) infrastructure code 
 │                              AWS Cloud                                   │
 │                                                                          │
 │  ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐ │
-│  │   API Gateway    │────▶│   App Runner     │────▶│    DynamoDB      │ │
+│  │   API Gateway    │────▶│   ECS Fargate    │────▶│    DynamoDB      │ │
 │  │  (Rate Limited)  │     │   (API Service)  │     │  (Jobs + Idemp.) │ │
 │  └──────────────────┘     └──────────────────┘     └──────────────────┘ │
 │                                    │                                      │
@@ -21,7 +21,7 @@ This directory contains the AWS Cloud Development Kit (CDK) infrastructure code 
 │                                    │                                      │
 │                                    ▼                                      │
 │                           ┌──────────────────┐                           │
-│                           │   App Runner     │                           │
+│                           │   ECS Fargate    │                           │
 │                           │  (Worker Service)│                           │
 │                           └──────────────────┘                           │
 │                                                                          │
@@ -43,7 +43,7 @@ infra/
 ├── stacks/
 │   ├── __init__.py
 │   ├── data_stack.py     # DynamoDB + SQS
-│   ├── compute_stack.py  # App Runner + ECR
+│   ├── compute_stack.py  # ECS Fargate + ECR
 │   ├── api_stack.py      # API Gateway
 │   └── cdn_stack.py      # S3 + CloudFront
 └── README.md             # This file
@@ -221,8 +221,8 @@ Creates:
 - ECR Repository: `harrison-prospera-challenge`
 - Secrets Manager: `harrison-jwt-secret`
 - IAM Roles: API and Worker service roles
-- App Runner Service: `harrison-api` (1 vCPU, 2 GB)
-- App Runner Service: `harrison-worker` (1 vCPU, 2 GB)
+- ECS Fargate Service: `harrison-api` (0.5 vCPU, 1 GB) with ALB
+- ECS Fargate Service: `harrison-worker` (0.25 vCPU, 0.5 GB)
 
 ### API Stack (`harrison-api-stack`)
 
@@ -242,7 +242,7 @@ Creates:
 
 ## Environment Variables
 
-### For App Runner Services
+### For ECS Fargate Services
 
 | Variable | Description |
 |----------|-------------|
@@ -264,12 +264,12 @@ Creates:
 
 ## Cost Estimation
 
-Based on AWS Free Tier and App Runner pricing:
+Based on AWS Free Tier and ECS Fargate pricing:
 
 | Resource | Monthly Cost (Estimate) |
 |----------|------------------------|
-| App Runner (API) | ~$5-10 |
-| App Runner (Worker) | ~$5-10 |
+| ECS Fargate (API) | ~$5-10 |
+| ECS Fargate (Worker) | ~$5-10 |
 | DynamoDB | ~$0 |
 | SQS | ~$0 |
 | API Gateway | ~$0-5 |
@@ -300,15 +300,21 @@ aws cloudformation describe-stack-resources \
     --stack-name harrison-data-stack
 ```
 
-### App Runner Not Starting
+### ECS Fargate Not Starting
 
 ```bash
 # Check service status
-aws apprunner describe-service \
-    --service-arn <service-arn>
+aws ecs describe-services \
+    --cluster harrison-cluster \
+    --services harrison-api
+
+# Check task status
+aws ecs describe-tasks \
+    --cluster harrison-cluster \
+    --tasks <task-arn>
 
 # Check logs in CloudWatch
-aws logs tail /aws/apprunner/<service-name>/<instance-id>
+aws logs tail /ecs/harrison/api
 ```
 
 ## Cleanup
@@ -340,7 +346,7 @@ cdk destroy harrison-data-stack
 
 ## Monitoring
 
-- **CloudWatch Logs**: App Runner services log to `/aws/apprunner/`
+- **CloudWatch Logs**: ECS Fargate services log to `/ecs/`
 - **CloudWatch Metrics**: Custom metrics for job processing
 - **CloudWatch Alarms**: Set up for error rate thresholds
 

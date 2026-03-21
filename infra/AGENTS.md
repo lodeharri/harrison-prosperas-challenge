@@ -67,8 +67,8 @@ aws dynamodb list-tables
 # Check SQS queues
 aws sqs list-queues
 
-# Check App Runner services
-aws apprunner list-services
+# Check ECS Fargate services
+aws ecs list-services --cluster harrison-cluster
 
 # Check API Gateway
 aws apigateway get-rest-apis
@@ -118,9 +118,9 @@ aws apigateway get-rest-apis
 - Updated `originAccessIdentityName` → `originAccessIdentityId` (deprecated attribute fix)
 - Changed `attr_function_arn` → `function_arn` for CloudFront Function
 
-### App Runner (compute_stack.py)
+### ECS Fargate (compute_stack.py)
 
-**Note:** Uses `CfnAutoScalingConfiguration` with `CfnService` (low-level L1 constructs) which are compatible with CDK v2.
+**Note:** Uses `ApplicationLoadBalancedFargateService` and `FargateService` high-level constructs which are fully compatible with CDK v2.
 
 ### API Gateway (api_stack.py)
 
@@ -165,7 +165,7 @@ infra/
 ├── stacks/
 │   ├── __init__.py            # Stack exports
 │   ├── data_stack.py          # DynamoDB + SQS
-│   ├── compute_stack.py       # App Runner (API + Worker)
+│   ├── compute_stack.py       # ECS Fargate (API + Worker)
 │   ├── api_stack.py           # API Gateway + Rate Limiting
 │   └── cdn_stack.py           # S3 + CloudFront
 └── README.md                  # Full deployment guide
@@ -191,18 +191,18 @@ infra/
 |----------|------|------|--------|
 | ECR Repository | `harrison-prospera-challenge` | Docker images | Scan on push |
 | Secrets Manager | `harrison-jwt-secret` | 64-char key | Auto-generated |
-| IAM Role | `APIServiceRole` | App Runner | DynamoDB + SQS + Secrets |
-| IAM Role | `WorkerServiceRole` | App Runner | DynamoDB + SQS |
-| App Runner | `harrison-api` | Service | 1 vCPU, 2 GB, port 8000 |
-| App Runner | `harrison-worker` | Service | 1 vCPU, 2 GB |
+| IAM Role | `APIServiceRole` | ECS Fargate | DynamoDB + SQS + Secrets |
+| IAM Role | `WorkerServiceRole` | ECS Fargate | DynamoDB + SQS |
+| ECS Fargate | `harrison-api` | ALB Service | 0.5 vCPU, 1 GB, port 8000 |
+| ECS Fargate | `harrison-worker` | Service | 0.25 vCPU, 0.5 GB |
 
 ### 3. API Stack (`harrison-api-stack`)
 
 | Resource | Name | Type | Config |
 |----------|------|------|--------|
 | API Gateway | `harrison-api-gw` | REST | Regional endpoint |
-| Resource | `/jobs` | POST, GET | App Runner integration |
-| Resource | `/jobs/{job_id}` | GET | App Runner integration |
+| Resource | `/jobs` | POST, GET | ECS ALB integration |
+| Resource | `/jobs/{job_id}` | GET | ECS ALB integration |
 | Resource | `/health` | GET | No auth |
 | Resource | `/auth` | POST | Token generation |
 | Usage Plan | `harrison-rate-limit` | 100 req/min | Burst 200 |
@@ -219,7 +219,7 @@ infra/
 
 ---
 
-## Environment Variables for App Runner
+## Environment Variables for ECS Fargate
 
 ### API Service
 
@@ -325,7 +325,7 @@ aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 ```
 harrison-data-stack
     └── harrison-compute-stack (needs queue URLs, table names)
-            └── harrison-api-stack (needs App Runner endpoint)
+            └── harrison-api-stack (needs ECS ALB endpoint)
                     └── harrison-cdn-stack (needs API URL for frontend)
 ```
 
@@ -440,8 +440,8 @@ aws cloudfront list-distributions
 
 | Service | Monthly Cost |
 |---------|--------------|
-| App Runner (API) | ~$5-10 |
-| App Runner (Worker) | ~$5-10 |
+| ECS Fargate (API) | ~$5-10 |
+| ECS Fargate (Worker) | ~$5-10 |
 | DynamoDB | ~$0 (free tier) |
 | SQS | ~$0 (free tier) |
 | API Gateway | ~$0-5 |
@@ -470,7 +470,7 @@ cdk destroy --all
 | `cdk.json` | CDK configuration |
 | `stacks/__init__.py` | Stack exports |
 | `stacks/data_stack.py` | DynamoDB + SQS resources |
-| `stacks/compute_stack.py` | App Runner + ECR + IAM |
+| `stacks/compute_stack.py` | ECS Fargate + ECR + IAM |
 | `stacks/api_stack.py` | API Gateway + Rate limiting |
 | `stacks/cdn_stack.py` | S3 + CloudFront |
 | `README.md` | Deployment guide |
@@ -485,7 +485,7 @@ After deployment, verify:
 - [ ] DynamoDB tables exist: `aws dynamodb list-tables`
 - [ ] SQS queues exist: `aws sqs list-queues`
 - [ ] ECR repository exists: `aws ecr describe-repositories`
-- [ ] App Runner services running: `aws apprunner list-services`
+- [ ] ECS Fargate services running: `aws ecs list-services --cluster harrison-cluster`
 - [ ] API Gateway configured: `aws apigateway get-rest-apis`
 - [ ] CloudFront distribution active: `aws cloudfront list-distributions`
 - [ ] Secrets Manager secret exists: `aws secretsmanager list-secrets`
@@ -539,5 +539,5 @@ El workflow `deploy.yml` incluye:
 ## References
 
 - CDK Documentation: https://docs.aws.amazon.com/cdk/
-- App Runner: https://docs.aws.amazon.com/apprunner/
+- ECS Fargate: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/getting-started-fargate.html
 - CDK Best Practices: https://docs.aws.amazon.com/cdk/latest/guide/best-practices.html

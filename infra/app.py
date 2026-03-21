@@ -5,7 +5,7 @@ Reto Prosperas - CDK Application Entry Point
 This module initializes the CDK application and defines the infrastructure stacks.
 It orchestrates the deployment of:
 - Data Stack: DynamoDB tables and SQS queues
-- Compute Stack: App Runner services (API + Worker) with ECR
+- Compute Stack: ECS Fargate services (API + Worker) with ECR
 - API Stack: API Gateway with rate limiting
 - CDN Stack: S3 static hosting + CloudFront
 
@@ -85,7 +85,7 @@ def synth_app() -> cdk.App:
     )
 
     # =======================================================================
-    # Compute Stack: App Runner + ECR
+    # Compute Stack: ECS + ECR
     # =======================================================================
     compute_stack = ComputeStack(
         app,
@@ -94,7 +94,7 @@ def synth_app() -> cdk.App:
         env=env,
         data_stack=data_stack,
         stack_prefix=stack_prefix,
-        description="App Runner services (API + Worker) with ECR repositories",
+        description="ECS Fargate services (API + Worker) with ECR repositories",
     )
 
     # Add dependency: compute needs queue URLs from data stack
@@ -113,7 +113,7 @@ def synth_app() -> cdk.App:
         description="API Gateway with rate limiting for API access",
     )
 
-    # Add dependency: API needs App Runner endpoint
+    # Add dependency: API needs ECS ALB endpoint
     api_stack.add_dependency(compute_stack)
 
     # =======================================================================

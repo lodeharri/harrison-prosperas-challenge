@@ -1,25 +1,22 @@
 """
-Compute Stack: App Runner Services and ECR Repositories
+Compute Stack: ECS Fargate Services and ECR Repositories
 
 This stack creates the compute layer for running the API and worker:
 - ECR repositories for Docker images
-- App Runner services for API and Worker
+- ECS Fargate services for API and Worker
 - IAM roles for AWS resource access
 - Secrets Manager for JWT secret
-- VPC Connector for private networking
 """
-
-from typing import Dict, Optional
 
 import aws_cdk as cdk
 from aws_cdk import (
     CfnOutput,
-    Duration,
     RemovalPolicy,
-    SecretValue,
     Stack,
-    aws_apprunner as apprunner,
+    aws_ec2 as ec2,
     aws_ecr as ecr,
+    aws_ecs as ecs,
+    aws_ecs_patterns as ecs_patterns,
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
 )
@@ -34,12 +31,12 @@ class ComputeStack(Stack):
 
     Creates:
         - ECR repository for Docker images
-        - App Runner service for REST API
-        - App Runner service for Worker (SQS consumer)
+        - ECS Fargate service for REST API
+        - ECS Fargate service for Worker (SQS consumer)
         - IAM roles with least-privilege permissions
         - Secrets Manager for JWT secret
 
-    Note: App Runner uses VPC Connector for private AWS resource access.
+    Note: Uses ECS Fargate for both API and Worker for consistency.
     """
 
     def __init__(
@@ -80,7 +77,7 @@ class ComputeStack(Stack):
         self.worker_role = self._create_worker_role()
 
         # ===================================================================
-        # App Runner Services
+        # ECS Fargate Services
         # ===================================================================
         self.api_service = self._create_api_service()
         self.worker_service = self._create_worker_service()
@@ -91,11 +88,33 @@ class ComputeStack(Stack):
         self._create_outputs()
 
     def _create_ecr_repository(self) -> ecr.Repository:
-        """Create ECR repository for Docker images."""
+        """Get or create ECR repository for Docker images."""
+        repo_name = f"{self.stack_prefix}-prospera-challenge"
+
+        # Try to import existing repository (for idempotency)
+        try:
+            repository = ecr.Repository.from_repository_name(
+                self,
+                "ECRRepository",
+                repository_name=repo_name,
+            )
+            # Output for existing repository
+            CfnOutput(
+                self,
+                "ECRRepositoryUri",
+                value=repository.repository_uri,
+                export_name="HarrisonECRRepositoryUri",
+            ).override_logical_id("ECRRepositoryUri")
+            return repository
+        except Exception:
+            # Repository doesn't exist, create it
+            pass
+
+        # Create new repository
         repository = ecr.Repository(
             self,
             "ECRRepository",
-            repository_name=f"{self.stack_prefix}-prospera-challenge",
+            repository_name=repo_name,
             image_scan_on_push=True,
             removal_policy=self._removal_policy,
         )
@@ -118,11 +137,34 @@ class ComputeStack(Stack):
         return repository
 
     def _create_jwt_secret(self) -> secretsmanager.Secret:
-        """Create Secrets Manager secret for JWT signing key."""
+        """Get or create Secrets Manager secret for JWT signing key."""
+        secret_name = f"{self.stack_prefix}-jwt-secret"
+
+        # Try to import existing secret (for idempotency)
+        try:
+            existing = secretsmanager.Secret.from_secret_name_v2(
+                self,
+                "JWTSecret",
+                secret_name=secret_name,
+            )
+            # Verify it has the arn property
+            if hasattr(existing, "secret_arn") and existing.secret_arn:
+                # Output for existing secret
+                CfnOutput(
+                    self,
+                    "JWTSecretArn",
+                    value=existing.secret_arn,
+                    export_name="HarrisonJWTSecretArn",
+                ).override_logical_id("JWTSecretArn")
+                return existing
+        except Exception:
+            pass
+
+        # Secret doesn't exist, create it
         secret = secretsmanager.Secret(
             self,
             "JWTSecret",
-            secret_name=f"{self.stack_prefix}-jwt-secret",
+            secret_name=secret_name,
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"jwt_secret_key": ""}',
                 generate_string_key="secure_token",
@@ -142,12 +184,12 @@ class ComputeStack(Stack):
         return secret
 
     def _create_api_role(self) -> iam.Role:
-        """Create IAM role for API App Runner service."""
+        """Create IAM role for API ECS Fargate task."""
         role = iam.Role(
             self,
             "APIServiceRole",
-            assumed_by=iam.ServicePrincipal("tasks.apprunner.amazonaws.com"),
-            description="Role for App Runner API service",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            description="Role for ECS Fargate API task",
         )
 
         # DynamoDB permissions (read/write jobs table)
@@ -162,9 +204,9 @@ class ComputeStack(Stack):
                     "dynamodb:Scan",
                 ],
                 resources=[
-                    f"{self.data_stack.jobs_table.table_arn}",
+                    self.data_stack.jobs_table.table_arn,
                     f"{self.data_stack.jobs_table.table_arn}/index/*",
-                    f"{self.data_stack.idempotency_table.table_arn}",
+                    self.data_stack.idempotency_table.table_arn,
                 ],
             )
         )
@@ -211,12 +253,12 @@ class ComputeStack(Stack):
         return role
 
     def _create_worker_role(self) -> iam.Role:
-        """Create IAM role for Worker App Runner service."""
+        """Create IAM role for Worker ECS Fargate task."""
         role = iam.Role(
             self,
             "WorkerServiceRole",
-            assumed_by=iam.ServicePrincipal("tasks.apprunner.amazonaws.com"),
-            description="Role for App Runner Worker service",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            description="Role for ECS Worker task",
         )
 
         # DynamoDB permissions (read/write jobs table)
@@ -230,7 +272,7 @@ class ComputeStack(Stack):
                     "dynamodb:Query",
                 ],
                 resources=[
-                    f"{self.data_stack.jobs_table.table_arn}",
+                    self.data_stack.jobs_table.table_arn,
                     f"{self.data_stack.jobs_table.table_arn}/index/*",
                 ],
             )
@@ -291,174 +333,157 @@ class ComputeStack(Stack):
 
         return role
 
-    def _get_environment_variables(self) -> Dict[str, str]:
-        """Get environment variables for API service."""
-        return {
-            "AWS_REGION": self.region,
-            "AWS_ENDPOINT_URL": "",  # Empty for real AWS
-            "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
-            "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
-            "SQS_QUEUE_URL": self.data_stack.job_queue_url,
-            "SQS_DLQ_URL": self.data_stack.dlq_url,
-            "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
-            "JWT_SECRET_KEY": self.jwt_secret.secret_arn,
-            "LOG_LEVEL": "INFO",
-        }
-
-    def _get_worker_environment_variables(self) -> Dict[str, str]:
-        """Get environment variables for Worker service."""
-        return {
-            "AWS_REGION": self.region,
-            "AWS_ENDPOINT_URL": "",  # Empty for real AWS
-            "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
-            "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
-            "SQS_QUEUE_URL": self.data_stack.job_queue_url,
-            "SQS_DLQ_URL": self.data_stack.dlq_url,
-            "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
-            "JWT_SECRET_KEY": self.jwt_secret.secret_arn,
-            "LOG_LEVEL": "INFO",
-        }
-
-    def _create_api_service(self) -> apprunner.CfnService:
+    def _create_api_service(self) -> ecs_patterns.ApplicationLoadBalancedFargateService:
         """
-        Create App Runner service for REST API.
+        Create ECS Fargate service with Application Load Balancer for REST API.
 
         Configuration:
-            - Instance type: small (1 vCPU, 2 GB)
-            - Min instances: 1
-            - Max instances: 10 (auto-scaling)
-            - Health check: /health endpoint
-            - Port: 8000
+            - CPU: 512 (0.5 vCPU)
+            - Memory: 1024 MB (1 GB)
+            - Desired count: 1
+            - Health check: HTTP /health on port 8000
+            - ALB provides stable public URL for API Gateway integration
 
-        Note: Uses the ECR repository's :latest image tag.
-        The image is built and pushed in the CI/CD pipeline (build-ecr job).
+        Note: Uses ApplicationLoadBalancedFargateService which automatically
+        creates an ALB with a stable DNS name.
         """
-        # Get image tag from CDK context, default to 'latest'
-        # The CI/CD pipeline passes IMAGE_TAG as an env var
+        # Get image tag from CDK context
         image_tag = self.node.try_get_context("imageTag") or "latest"
 
-        # Reference the ECR repository (already created by this stack)
-        # The image URI is: <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>
-        image_identifier = f"{self.ecr_repository.repository_uri}:{image_tag}"
-
-        service = apprunner.CfnService(
+        # Create the load balanced Fargate service
+        load_balanced_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self,
             "APIService",
             service_name=f"{self.stack_prefix}-api",
-            source_configuration=apprunner.CfnService.SourceConfigurationProperty(
-                authentication_configuration=apprunner.CfnService.AuthenticationConfigurationProperty(
-                    access_role_arn=self.api_role.role_arn,
+            cluster=self.data_stack.ecs_cluster,
+            task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
+                image=ecs.ContainerImage.from_ecr_repository(
+                    repository=self.ecr_repository,
+                    tag=image_tag,
                 ),
-                image_repository=apprunner.CfnService.ImageRepositoryProperty(
-                    image_identifier=image_identifier,
-                    image_repository_type="ECR",
-                    image_configuration=apprunner.CfnService.ImageConfigurationProperty(
-                        port="8000",
-                        runtime_environment_variables=[
-                            apprunner.CfnService.KeyValuePairProperty(
-                                name=k,
-                                value=v,
-                            )
-                            for k, v in self._get_environment_variables().items()
-                        ],
-                    ),
+                container_name="api",
+                container_port=8000,
+                environment={
+                    "AWS_REGION": self.region,
+                    "AWS_ENDPOINT_URL": "",
+                    "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
+                    "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
+                    "SQS_QUEUE_URL": self.data_stack.job_queue_url,
+                    "SQS_DLQ_URL": self.data_stack.dlq_url,
+                    "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
+                    "LOG_LEVEL": "INFO",
+                },
+                log_driver=ecs.LogDrivers.aws_logs(
+                    stream_prefix=f"{self.stack_prefix}/api"
                 ),
-                auto_deployments_enabled=False,  # Manual deployment
             ),
-            health_check_configuration=apprunner.CfnService.HealthCheckConfigurationProperty(
-                path="/health",
-                protocol="HTTPS",
-                interval=10,
-                timeout=5,
-                healthy_threshold=2,
-                unhealthy_threshold=3,
-            ),
-            instance_configuration=apprunner.CfnService.InstanceConfigurationProperty(
-                cpu="1 vCPU",
-                memory="2 GB",
-            ),
+            assign_public_ip=True,
+            desired_count=1,
+            min_healthy_percent=50,
+            max_healthy_percent=200,
+            public_load_balancer=True,
+            health_check_grace_period=cdk.Duration.seconds(30),
         )
 
-        # Auto-scaling configuration
-        scaling = apprunner.CfnAutoScalingConfiguration(
-            self,
-            "APIAutoScaling",
-            auto_scaling_configuration_name=f"{self.stack_prefix}-api-scaling",
-            max_concurrency=100,
-            max_size=10,
-            min_size=1,
+        # Add target health check configuration
+        load_balanced_service.target_group.configure_health_check(
+            path="/health",
+            port="8000",
+            healthy_threshold_count=2,
+            unhealthy_threshold_count=3,
+            timeout=cdk.Duration.seconds(5),
+            interval=cdk.Duration.seconds(10),
         )
 
-        # Apply scaling to service
+        # Output the ALB DNS name (stable URL for API Gateway)
         CfnOutput(
             self,
             "APIServiceUrl",
-            value=f"https://{service.attr_service_url}",
+            value=f"http://{load_balanced_service.load_balancer.load_balancer_dns_name}:8000",
             export_name="HarrisonAPIServiceUrl",
         ).override_logical_id("APIServiceUrl")
 
-        return service
+        # Output the security group for reference
+        CfnOutput(
+            self,
+            "APIServiceSecurityGroup",
+            value=load_balanced_service.service.connections.security_groups[
+                0
+            ].security_group_id,
+            export_name="HarrisonAPIServiceSecurityGroup",
+        ).override_logical_id("APIServiceSecurityGroup")
 
-    def _create_worker_service(self) -> apprunner.CfnService:
+        # Return the load balanced service wrapper (contains the FargateService)
+        return load_balanced_service
+
+    def _create_worker_service(self) -> ecs.FargateService:
         """
-        Create App Runner service for Worker (SQS consumer).
+        Create ECS Fargate service for Worker (SQS consumer with WebSocket).
 
         Configuration:
-            - Instance type: small (1 vCPU, 2 GB)
-            - Min instances: 1
-            - Max instances: 5 (limit concurrency)
+            - CPU: 256 (0.25 vCPU)
+            - Memory: 512 MB
+            - Desired count: 1 (can scale)
             - No health check (background worker)
             - Environment: Worker-specific variables
 
-        Note: Uses the ECR repository's :latest image tag.
-        The image is built and pushed in the CI/CD pipeline (build-ecr job).
-        The worker uses a different start_command to run the worker module.
+        Note: Uses ECS Fargate because the worker maintains WebSocket
+        connections and needs persistent connections to SQS.
         """
         # Get image tag from CDK context, default to 'latest'
-        # The CI/CD pipeline passes IMAGE_TAG as an env var
         image_tag = self.node.try_get_context("imageTag") or "latest"
 
-        # Reference the ECR repository (already created by this stack)
-        # The image URI is: <account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>
-        image_identifier = f"{self.ecr_repository.repository_uri}:{image_tag}"
+        # Task Definition
+        task_definition = ecs.FargateTaskDefinition(
+            self,
+            "WorkerTaskDefinition",
+            cpu=256,
+            memory_limit_mib=512,
+            task_role=self.worker_role,
+        )
 
-        service = apprunner.CfnService(
+        # Add container with worker command
+        container = task_definition.add_container(
+            "WorkerContainer",
+            image=ecs.ContainerImage.from_ecr_repository(
+                repository=self.ecr_repository,
+                tag=image_tag,
+            ),
+            environment={
+                "AWS_REGION": self.region,
+                "AWS_ENDPOINT_URL": "",  # Empty for real AWS
+                "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
+                "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
+                "SQS_QUEUE_URL": self.data_stack.job_queue_url,
+                "SQS_DLQ_URL": self.data_stack.dlq_url,
+                "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
+                "LOG_LEVEL": "INFO",
+            },
+            logging=ecs.LogDrivers.aws_logs(
+                stream_prefix=f"{self.stack_prefix}/worker"
+            ),
+            command=["python", "-m", "backend.worker.main"],
+        )
+
+        # ECS Service (Fargate)
+        service = ecs.FargateService(
             self,
             "WorkerService",
-            service_name=f"{self.stack_prefix}-worker",
-            source_configuration=apprunner.CfnService.SourceConfigurationProperty(
-                authentication_configuration=apprunner.CfnService.AuthenticationConfigurationProperty(
-                    access_role_arn=self.worker_role.role_arn,
-                ),
-                image_repository=apprunner.CfnService.ImageRepositoryProperty(
-                    image_identifier=image_identifier,
-                    image_repository_type="ECR",
-                    image_configuration=apprunner.CfnService.ImageConfigurationProperty(
-                        port="8000",  # Still expose port but worker doesn't use it
-                        runtime_environment_variables=[
-                            apprunner.CfnService.KeyValuePairProperty(
-                                name=k,
-                                value=v,
-                            )
-                            for k, v in self._get_worker_environment_variables().items()
-                        ],
-                        start_command="python -m worker.main",  # Worker entry point
-                    ),
-                ),
-                auto_deployments_enabled=False,
-            ),
-            instance_configuration=apprunner.CfnService.InstanceConfigurationProperty(
-                cpu="1 vCPU",
-                memory="2 GB",
-            ),
+            cluster=self.data_stack.ecs_cluster,
+            task_definition=task_definition,
+            assign_public_ip=True,
+            desired_count=1,
+            min_healthy_percent=50,
+            max_healthy_percent=200,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
         CfnOutput(
             self,
-            "WorkerServiceUrl",
-            value=f"https://{service.attr_service_url}",
-            export_name="HarrisonWorkerServiceUrl",
-        ).override_logical_id("WorkerServiceUrl")
+            "WorkerServiceName",
+            value=service.service_name,
+            export_name="HarrisonWorkerServiceName",
+        ).override_logical_id("WorkerServiceName")
 
         return service
 
@@ -487,11 +512,12 @@ class ComputeStack(Stack):
         ).override_logical_id("WorkerRoleArn")
 
     @property
-    def api_service_url(self) -> str:
-        """Get the API service URL."""
-        return f"https://{self.api_service.attr_service_url}"
-
-    @property
     def ecr_repository_uri(self) -> str:
         """Get the ECR repository URI."""
         return self.ecr_repository.repository_uri
+
+    @property
+    def api_service_url(self) -> str:
+        """Get the API service URL (ALB DNS name)."""
+        # Get from the load balancer output
+        return f"http://{self.api_service.load_balancer.load_balancer_dns_name}:8000"

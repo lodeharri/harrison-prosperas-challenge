@@ -161,9 +161,9 @@ The AWS credentials need the following permissions:
 - `iam:CreateRole`
 - `iam:AttachRolePolicy`
 - `iam:PassRole`
-- `apprunner:CreateService`
-- `apprunner:DescribeService`
-- `apprunner:UpdateService`
+- `ecs:CreateService`
+- `ecs:DescribeServices`
+- `ecs:UpdateService`
 - `dynamodb:CreateTable`
 - `dynamodb:DescribeTable`
 - `sqs:CreateQueue`
@@ -187,7 +187,7 @@ The AWS credentials need the following permissions:
 
 | Service | Configuration | Estimated Cost |
 |---------|---------------|----------------|
-| App Runner | 1 vCPU, 2 GB, Auto-scaling | ~$5-7/month |
+| ECS Fargate | 0.5 vCPU, 1 GB, Auto-scaling | ~$5-7/month |
 | DynamoDB | On-demand | ~$0-1/month |
 | SQS | Standard queue | ~$0/month* |
 | ECR | Storage only | ~$0.05/month |

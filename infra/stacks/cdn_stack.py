@@ -190,7 +190,7 @@ class CDNStack(Stack):
             distribution_config=cloudfront.CfnDistribution.DistributionConfigProperty(
                 enabled=True,
                 comment=f"CloudFront distribution for {self.stack_prefix} frontend",
-                price_class=cloudfront.PriceClass.PRICE_CLASS_100.value,  # NA + EU
+                price_class="PriceClass_100",  # NA + EU
                 http_version="http2and3",
                 default_root_object="index.html",
                 viewer_certificate=cloudfront.CfnDistribution.ViewerCertificateProperty(
@@ -200,7 +200,7 @@ class CDNStack(Stack):
                 origins=[
                     cloudfront.CfnDistribution.OriginProperty(
                         id="frontend",
-                        domain_name=self.bucket.bucket_name,
+                        domain_name=self.bucket.bucket_domain_name,
                         s3_origin_config=cloudfront.CfnDistribution.S3OriginConfigProperty(
                             origin_access_identity=(
                                 f"origin-access-identity/cloudfront/{self.oai.origin_access_identity_id}"
@@ -212,7 +212,7 @@ class CDNStack(Stack):
                 ],
                 default_cache_behavior=cloudfront.CfnDistribution.DefaultCacheBehaviorProperty(
                     target_origin_id="frontend",
-                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS.value,
+                    viewer_protocol_policy="redirect-to-https",
                     compress=True,
                     allowed_methods=["GET", "HEAD", "OPTIONS"],
                     cached_methods=["GET", "HEAD", "OPTIONS"],

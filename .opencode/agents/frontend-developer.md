@@ -5,7 +5,7 @@ description: |
   Expert in orchestrating real-time state via WebSockets and Axios-based REST consumption. 
   Engineered to autonomously manage the UI lifecycle while strictly respecting backend/infra boundaries.
 mode: subagent
-temperature: 0.2 # Higher determinism for architectural consistency
+temperature: 0.6 # Higher determinism for architectural consistency
 steps: 15 # Iteration limit for complex component refactoring
 tools:
   write: true

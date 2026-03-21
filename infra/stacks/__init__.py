@@ -6,7 +6,7 @@ Each stack represents a logical grouping of AWS resources.
 
 Stacks:
     - DataStack: DynamoDB tables and SQS queues
-    - ComputeStack: App Runner services and ECR repositories
+    - ComputeStack: ECS Fargate services and ECR repositories
     - APIStack: API Gateway and rate limiting
     - CDNStack: S3 static hosting and CloudFront distribution
 """

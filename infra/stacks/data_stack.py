@@ -16,6 +16,8 @@ from aws_cdk import (
     RemovalPolicy,
     Stack,
     aws_dynamodb as dynamodb,
+    aws_ec2 as ec2,
+    aws_ecs as ecs,
     aws_sqs as sqs,
 )
 from constructs import Construct
@@ -59,6 +61,14 @@ class DataStack(Stack):
 
         # Get stack prefix from context
         self.stack_prefix = self.node.try_get_context("stackPrefix") or "harrison"
+
+        # ===================================================================
+        # VPC for ECS Cluster (exposed for cross-stack reference)
+        # ===================================================================
+        self.vpc = self._create_vpc()
+
+        # ECS Cluster
+        self.ecs_cluster = self._create_ecs_cluster()
 
         # ===================================================================
         # DynamoDB Tables
@@ -270,45 +280,6 @@ class DataStack(Stack):
 
         return queue
 
-    def _create_outputs(self) -> None:
-        """Create CloudFormation outputs for cross-stack references."""
-
-        # DynamoDB
-        CfnOutput(
-            self,
-            "JobsTableArn",
-            value=self.jobs_table.table_arn,
-            export_name="HarrisonJobsTableArn",
-        ).override_logical_id("JobsTableArn")
-
-        CfnOutput(
-            self,
-            "JobsTableName",
-            value=self.jobs_table.table_name,
-            export_name="HarrisonJobsTableName",
-        ).override_logical_id("JobsTableName")
-
-        CfnOutput(
-            self,
-            "IdempotencyTableArn",
-            value=self.idempotency_table.table_arn,
-            export_name="HarrisonIdempotencyTableArn",
-        ).override_logical_id("IdempotencyTableArn")
-
-        CfnOutput(
-            self,
-            "IdempotencyTableName",
-            value=self.idempotency_table.table_name,
-            export_name="HarrisonIdempotencyTableName",
-        ).override_logical_id("IdempotencyTableName")
-
-        CfnOutput(
-            self,
-            "DLQUrl",
-            value=self.dlq.queue_url,
-            export_name="HarrisonDLQUrl",
-        ).override_logical_id("DLQUrl")
-
     # Properties for cross-stack references
     @property
     def jobs_table_name(self) -> str:
@@ -349,3 +320,87 @@ class DataStack(Stack):
     def priority_queue_arn(self) -> str:
         """Get the priority queue ARN."""
         return self.priority_queue.queue_arn
+
+    # ===================================================================
+    # VPC and ECS Cluster
+    # ===================================================================
+
+    def _create_vpc(self) -> ec2.Vpc:
+        """Create VPC for ECS cluster."""
+        return ec2.Vpc(
+            self,
+            "VPC",
+            vpc_name=f"{self.stack_prefix}-vpc",
+            max_azs=2,
+            nat_gateways=0,
+            subnet_configuration=[
+                ec2.SubnetConfiguration(
+                    name="Public",
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    cidr_mask=24,
+                )
+            ],
+        )
+
+    def _create_ecs_cluster(self) -> ecs.Cluster:
+        """Create ECS cluster."""
+        return ecs.Cluster(
+            self,
+            "ECSCluster",
+            cluster_name=f"{self.stack_prefix}-cluster",
+            vpc=self.vpc,
+        )
+
+    def _create_outputs(self) -> None:
+        """Create CloudFormation outputs for cross-stack references."""
+        # VPC Output
+        CfnOutput(
+            self,
+            "VPCId",
+            value=self.vpc.vpc_id,
+            export_name="HarrisonVPCId",
+        ).override_logical_id("VPCId")
+
+        # ECS Cluster Output
+        CfnOutput(
+            self,
+            "ECSClusterName",
+            value=self.ecs_cluster.cluster_name,
+            export_name="HarrisonECSClusterName",
+        ).override_logical_id("ECSClusterName")
+
+        # Existing DynamoDB outputs
+        CfnOutput(
+            self,
+            "JobsTableArn",
+            value=self.jobs_table.table_arn,
+            export_name="HarrisonJobsTableArn",
+        ).override_logical_id("JobsTableArn")
+
+        CfnOutput(
+            self,
+            "JobsTableName",
+            value=self.jobs_table.table_name,
+            export_name="HarrisonJobsTableName",
+        ).override_logical_id("JobsTableName")
+
+        CfnOutput(
+            self,
+            "IdempotencyTableArn",
+            value=self.idempotency_table.table_arn,
+            export_name="HarrisonIdempotencyTableArn",
+        ).override_logical_id("IdempotencyTableArn")
+
+        CfnOutput(
+            self,
+            "IdempotencyTableName",
+            value=self.idempotency_table.table_name,
+            export_name="HarrisonIdempotencyTableName",
+        ).override_logical_id("IdempotencyTableName")
+
+        CfnOutput(
+            self,
+            "DLQUrl",
+            value=self.dlq.queue_url,
+            export_name="HarrisonDLQUrl",
+        ).override_logical_id("DLQUrl")

@@ -6,7 +6,7 @@ This stack creates the API layer for exposing the backend services:
 - Resources and Methods for /jobs, /jobs/{id}, /health
 - Usage Plans with rate limiting
 - API Keys for access control
-- Integration with App Runner services
+- Integration with ECS Fargate ALB
 """
 
 from typing import Dict, Optional
@@ -33,7 +33,7 @@ class APIStack(Stack):
         - Methods: GET, POST, PUT
         - Usage Plans with rate limiting (100 req/min, burst 200)
         - API Key for authentication
-        - Integration with App Runner API service
+        - Integration with ECS Fargate ALB
 
     Note: JWT validation is done in the FastAPI backend,
           not in API Gateway (NONE authorizer).
@@ -103,10 +103,10 @@ class APIStack(Stack):
         return api
 
     def _create_resources(self) -> None:
-        """Create API resources and integrate with App Runner."""
+        """Create API resources and integrate with ECS ALB."""
 
-        # Get App Runner endpoint (the service URL)
-        app_runner_url = self.compute_stack.api_service_url
+        # Get ECS ALB endpoint (the service URL)
+        service_url = self.compute_stack.api_service_url
 
         # ===================================================================
         # /auth Resource (for token generation)
@@ -114,7 +114,7 @@ class APIStack(Stack):
         auth_resource = self.api.root.add_resource("auth")
 
         auth_integration = apigateway.HttpIntegration(
-            f"{app_runner_url}/auth/token",
+            f"{service_url}/auth/token",
             http_method="POST",
             options=apigateway.IntegrationOptions(
                 request_parameters={
@@ -170,7 +170,7 @@ class APIStack(Stack):
         jobs_resource = self.api.root.add_resource("jobs")
 
         jobs_integration = apigateway.HttpIntegration(
-            f"{app_runner_url}/jobs",
+            f"{service_url}/jobs",
             http_method="GET",
             options=apigateway.IntegrationOptions(
                 request_parameters={
@@ -219,7 +219,7 @@ class APIStack(Stack):
 
         # POST /jobs - Create new job
         jobs_post_integration = apigateway.HttpIntegration(
-            f"{app_runner_url}/jobs",
+            f"{service_url}/jobs",
             http_method="POST",
             options=apigateway.IntegrationOptions(
                 request_parameters={
@@ -288,7 +288,7 @@ class APIStack(Stack):
         job_id_resource = jobs_resource.add_resource("{job_id}")
 
         job_id_integration = apigateway.HttpIntegration(
-            f"{app_runner_url}/jobs/{{job_id}}",
+            f"{service_url}/jobs/{{job_id}}",
             http_method="GET",
             options=apigateway.IntegrationOptions(
                 request_parameters={
@@ -339,7 +339,7 @@ class APIStack(Stack):
         health_resource = self.api.root.add_resource("health")
 
         health_integration = apigateway.HttpIntegration(
-            f"{app_runner_url}/health",
+            f"{service_url}/health",
             http_method="GET",
             options=apigateway.IntegrationOptions(
                 integration_responses=[

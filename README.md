@@ -79,12 +79,12 @@ Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB (
 9. API → WebSocket → Usuario ve actualización en tiempo real
 ```
 
-### 2.2 Frontend → API Gateway → App Runner → DynamoDB
+### 2.2 Frontend → API Gateway → ECS Fargate → DynamoDB
 
 ```
 ┌─────────┐     ┌────────────┐     ┌─────────────┐     ┌─────────┐
-│Frontend │────▶│CloudFront  │────▶│API Gateway  │────▶│App      │
-│(React)  │◀────│(Cache)     │◀────│(Rate Limit) │◀────│Runner   │
+│Frontend │────▶│CloudFront  │────▶│API Gateway  │────▶│ECS      │
+│(React)  │◀────│(Cache)     │◀────│(Rate Limit) │◀────│Fargate  │
 └─────────┘     └────────────┘     └─────────────┘     └────┬────┘
                                                             │
                                                             ▼
@@ -147,7 +147,7 @@ Se ejecuta en: Solo push a `main`
 │                 ▼                                            │
 │        ┌───────────────┐                                     │
 │        │  deploy-cdk  │  (CDK Deploy: DynamoDB, SQS,        │
-│        │              │   App Runner, API Gateway, S3)       │
+│        │              │   ECS Fargate, API Gateway, S3)       │
 │        └───────┬──────┘                                     │
 │                │                                            │
 │    ┌───────────┴───────────┐                                │
@@ -323,8 +323,8 @@ curl http://localhost:8000/jobs/{job_id} \
 | SQS | `harrison-jobs-dlq` | Dead Letter Queue |
 | SQS | `harrison-jobs-priority` | Cola de prioridad |
 | ECR | `harrison-prospera-challenge` | Imágenes Docker |
-| App Runner | `harrison-api` | API REST |
-| App Runner | `harrison-worker` | Worker asíncrono |
+| ECS Fargate | `harrison-api` | API REST con ALB |
+| ECS Fargate | `harrison-worker` | Worker asíncrono |
 | API Gateway | `harrison-api-gw` | Proxy + Rate Limiting |
 | S3 | `harrison-frontend` | Hosting estático |
 | CloudFront | `harrison-frontend-cdn` | CDN del frontend |
@@ -335,7 +335,7 @@ curl http://localhost:8000/jobs/{job_id} \
 
 | Servicio | Costo/mes |
 |----------|-----------|
-| App Runner (API + Worker) | $5-7 |
+| ECS Fargate (API + Worker) | $5-7 |
 | DynamoDB | $0-1 |
 | SQS | $0 |
 | API Gateway | $0 |
