@@ -230,8 +230,11 @@ environment={
     "DYNAMODB_TABLE_JOBS": "harrison-jobs",
     "DYNAMODB_TABLE_IDEMPOTENCY": "harrison-idempotency",
     "SQS_QUEUE_URL": "https://sqs.us-east-1.amazonaws.com/ACCOUNT/harrison-jobs-queue",
+    "SQS_QUEUE_NAME": "harrison-jobs-queue",
     "SQS_DLQ_URL": "https://sqs.us-east-1.amazonaws.com/ACCOUNT/harrison-jobs-dlq",
+    "SQS_DLQ_NAME": "harrison-jobs-dlq",
     "SQS_PRIORITY_QUEUE_URL": "https://sqs.us-east-1.amazonaws.com/ACCOUNT/harrison-jobs-priority",
+    "SQS_PRIORITY_QUEUE_NAME": "harrison-jobs-priority",
     "JWT_SECRET_KEY": "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:harrison-jwt-secret",
     "LOG_LEVEL": "INFO",
 }

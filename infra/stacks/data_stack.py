@@ -319,6 +319,21 @@ class DataStack(Stack):
         """Get the priority queue ARN."""
         return self.priority_queue.queue_arn
 
+    @property
+    def job_queue_name(self) -> str:
+        """Get the main job queue name."""
+        return self.job_queue.queue_name
+
+    @property
+    def dlq_name(self) -> str:
+        """Get the DLQ name."""
+        return self.dlq.queue_name
+
+    @property
+    def priority_queue_name(self) -> str:
+        """Get the priority queue name."""
+        return self.priority_queue.queue_name
+
     # ===================================================================
     # VPC and ECS Cluster
     # ===================================================================

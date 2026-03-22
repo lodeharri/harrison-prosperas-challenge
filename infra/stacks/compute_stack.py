@@ -11,6 +11,7 @@ This stack creates the compute layer for running the API and worker:
 import aws_cdk as cdk
 from aws_cdk import (
     CfnOutput,
+    Duration,
     RemovalPolicy,
     Stack,
     aws_ec2 as ec2,
@@ -19,6 +20,7 @@ from aws_cdk import (
     aws_ecs_patterns as ecs_patterns,
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
+    aws_elasticloadbalancingv2 as elbv2,
 )
 from constructs import Construct
 
@@ -371,8 +373,11 @@ class ComputeStack(Stack):
                     "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
                     "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
                     "SQS_QUEUE_URL": self.data_stack.job_queue_url,
+                    "SQS_QUEUE_NAME": self.data_stack.job_queue_name,
                     "SQS_DLQ_URL": self.data_stack.dlq_url,
+                    "SQS_DLQ_NAME": self.data_stack.dlq_name,
                     "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
+                    "SQS_PRIORITY_QUEUE_NAME": self.data_stack.priority_queue_name,
                     "LOG_LEVEL": "INFO",
                 },
                 log_driver=ecs.LogDrivers.aws_logs(
@@ -395,6 +400,32 @@ class ComputeStack(Stack):
             unhealthy_threshold_count=3,
             timeout=cdk.Duration.seconds(5),
             interval=cdk.Duration.seconds(10),
+        )
+
+        # Allow external access on port 8000 for WebSocket connections
+        # This is needed because API Gateway doesn't support WebSocket,
+        # so frontend connects directly to ALB for real-time notifications
+        alb_sg = load_balanced_service.load_balancer.connections.security_groups[0]
+        from aws_cdk import aws_ec2 as ec2
+
+        alb_sg.add_ingress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(8000),
+            description="Allow WebSocket connections from internet",
+        )
+
+        # Add listener on port 8000 for WebSocket connections
+        # The default listener is on port 80, but FastAPI listens on 8000
+        # Create a new listener for port 8000
+        elbv2.ApplicationListener(
+            self,
+            "WebSocketListener",
+            load_balancer=load_balanced_service.load_balancer,
+            port=8000,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            default_action=elbv2.ListenerAction.forward(
+                [load_balanced_service.target_group]
+            ),
         )
 
         # Output the ALB DNS name (stable URL for API Gateway)
@@ -456,9 +487,14 @@ class ComputeStack(Stack):
                 "DYNAMODB_TABLE_JOBS": self.data_stack.jobs_table_name,
                 "DYNAMODB_TABLE_IDEMPOTENCY": self.data_stack.idempotency_table_name,
                 "SQS_QUEUE_URL": self.data_stack.job_queue_url,
+                "SQS_QUEUE_NAME": self.data_stack.job_queue_name,
                 "SQS_DLQ_URL": self.data_stack.dlq_url,
+                "SQS_DLQ_NAME": self.data_stack.dlq_name,
                 "SQS_PRIORITY_QUEUE_URL": self.data_stack.priority_queue_url,
+                "SQS_PRIORITY_QUEUE_NAME": self.data_stack.priority_queue_name,
                 "LOG_LEVEL": "INFO",
+                # Worker calls API's /internal/notify endpoint for WebSocket notifications
+                "API_BASE_URL": f"http://{self.api_service.load_balancer.load_balancer_dns_name}:8000",
             },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix=f"{self.stack_prefix}/worker"
@@ -522,7 +558,7 @@ class ComputeStack(Stack):
         """Get the API service URL (ALB DNS name)."""
         # Get from the load balancer output
         return f"http://{self.api_service.load_balancer.load_balancer_dns_name}"
-    
+
     @property
     def load_balancer_dns_name(self) -> str:
         """Get the API service URL (ALB DNS name)."""
