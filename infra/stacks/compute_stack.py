@@ -521,4 +521,10 @@ class ComputeStack(Stack):
     def api_service_url(self) -> str:
         """Get the API service URL (ALB DNS name)."""
         # Get from the load balancer output
-        return f"http://{self.api_service.load_balancer.load_balancer_dns_name}:8000"
+        return f"http://{self.api_service.load_balancer.load_balancer_dns_name}"
+    
+    @property
+    def load_balancer_dns_name(self) -> str:
+        """Get the API service URL (ALB DNS name)."""
+        # Get from the load balancer output
+        return self.api_service.load_balancer.load_balancer_dns_name

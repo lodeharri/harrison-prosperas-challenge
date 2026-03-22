@@ -7,10 +7,12 @@ This stack creates the API layer for exposing the backend services:
 - Usage Plans with rate limiting
 - API Keys for access control
 - Integration with ECS Fargate ALB
+- CORS support for all endpoints
 """
 
 from typing import Dict, Optional
 
+import aws_cdk as cdk
 from aws_cdk import (
     CfnOutput,
     Duration,
@@ -21,6 +23,18 @@ from aws_cdk import (
 from constructs import Construct
 
 from .compute_stack import ComputeStack
+
+
+# =============================================================================
+# CORS Headers Configuration
+# =============================================================================
+# Headers to pass through from backend to API Gateway responses
+CORS_RESPONSE_HEADERS = {
+    "method.response.header.Access-Control-Allow-Origin": "integration.response.header.Access-Control-Allow-Origin",
+    "method.response.header.Access-Control-Allow-Headers": "integration.response.header.Access-Control-Allow-Headers",
+    "method.response.header.Access-Control-Allow-Methods": "integration.response.header.Access-Control-Allow-Methods",
+    "method.response.header.Access-Control-Max-Age": "integration.response.header.Access-Control-Max-Age",
+}
 
 
 class APIStack(Stack):
@@ -74,7 +88,8 @@ class APIStack(Stack):
         self._create_outputs()
 
     def _create_api_gateway(self) -> apigateway.RestApi:
-        """Create the REST API Gateway."""
+        """Create the REST API Gateway with CORS configuration."""
+        # Create the RestApi
         api = apigateway.RestApi(
             self,
             "APIGateway",
@@ -85,6 +100,10 @@ class APIStack(Stack):
             ),
             binary_media_types=["multipart/form-data", "application/octet-stream"],
         )
+
+        # Apply CORS configuration at the API Gateway level
+        # Note: For REST API, CORS must be configured via method responses and integrations
+        # This is handled in the backend FastAPI with CORSMiddleware
 
         CfnOutput(
             self,
@@ -111,7 +130,7 @@ class APIStack(Stack):
         # ===================================================================
         # /auth Resource (for token generation)
         # ===================================================================
-        auth_resource = self.api.root.add_resource("auth")
+        auth_resource = self.api.root.add_resource("auth").add_resource("token")
 
         auth_integration = apigateway.HttpIntegration(
             f"{service_url}/auth/token",
@@ -125,6 +144,7 @@ class APIStack(Stack):
                         status_code="200",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -132,6 +152,7 @@ class APIStack(Stack):
                         selection_pattern="400",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -139,6 +160,7 @@ class APIStack(Stack):
                         selection_pattern="401",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                 ],
@@ -156,6 +178,10 @@ class APIStack(Stack):
                     status_code="200",
                     response_parameters={
                         "method.response.header.Content-Type": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
                     },
                     response_models={
                         "application/json": apigateway.Model.EMPTY_MODEL,
@@ -163,6 +189,9 @@ class APIStack(Stack):
                 ),
             ],
         )
+
+        # Add OPTIONS method for /auth/token (CORS preflight)
+        self._add_cors_options_method(auth_resource)
 
         # ===================================================================
         # /jobs Resource
@@ -183,6 +212,7 @@ class APIStack(Stack):
                         status_code="200",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -190,6 +220,7 @@ class APIStack(Stack):
                         selection_pattern="401",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                 ],
@@ -209,6 +240,10 @@ class APIStack(Stack):
                     status_code="200",
                     response_parameters={
                         "method.response.header.Content-Type": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
                     },
                     response_models={
                         "application/json": apigateway.Model.EMPTY_MODEL,
@@ -233,6 +268,7 @@ class APIStack(Stack):
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
                             "method.response.header.Location": "integration.response.header.Location",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -240,6 +276,7 @@ class APIStack(Stack):
                         selection_pattern="400",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -247,6 +284,7 @@ class APIStack(Stack):
                         selection_pattern="401",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -254,6 +292,7 @@ class APIStack(Stack):
                         selection_pattern="409",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                 ],
@@ -274,6 +313,10 @@ class APIStack(Stack):
                     response_parameters={
                         "method.response.header.Content-Type": True,
                         "method.response.header.Location": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
                     },
                     response_models={
                         "application/json": apigateway.Model.EMPTY_MODEL,
@@ -281,6 +324,9 @@ class APIStack(Stack):
                 ),
             ],
         )
+
+        # Add OPTIONS method for /jobs (CORS preflight)
+        self._add_cors_options_method(jobs_resource)
 
         # ===================================================================
         # /jobs/{job_id} Resource
@@ -300,6 +346,7 @@ class APIStack(Stack):
                         status_code="200",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                     apigateway.IntegrationResponse(
@@ -307,6 +354,7 @@ class APIStack(Stack):
                         selection_pattern="404",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                 ],
@@ -325,6 +373,10 @@ class APIStack(Stack):
                     status_code="200",
                     response_parameters={
                         "method.response.header.Content-Type": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
                     },
                     response_models={
                         "application/json": apigateway.Model.EMPTY_MODEL,
@@ -332,6 +384,9 @@ class APIStack(Stack):
                 ),
             ],
         )
+
+        # Add OPTIONS method for /jobs/{job_id} (CORS preflight)
+        self._add_cors_options_method(job_id_resource)
 
         # ===================================================================
         # /health Resource (no auth required)
@@ -347,6 +402,7 @@ class APIStack(Stack):
                         status_code="200",
                         response_parameters={
                             "method.response.header.Content-Type": "integration.response.header.Content-Type",
+                            **CORS_RESPONSE_HEADERS,
                         },
                     ),
                 ],
@@ -361,6 +417,10 @@ class APIStack(Stack):
                     status_code="200",
                     response_parameters={
                         "method.response.header.Content-Type": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
                     },
                     response_models={
                         "application/json": apigateway.Model.EMPTY_MODEL,
@@ -368,6 +428,9 @@ class APIStack(Stack):
                 ),
             ],
         )
+
+        # Add OPTIONS method for /health (CORS preflight)
+        self._add_cors_options_method(health_resource)
 
         # ===================================================================
         # /ws/jobs/{user_id} Resource (WebSocket - optional)
@@ -456,3 +519,54 @@ class APIStack(Stack):
     def api_gateway_id(self) -> str:
         """Get the API Gateway ID."""
         return self.api.rest_api_id
+
+    def _add_cors_options_method(self, resource: apigateway.Resource) -> None:
+        """
+        Add an OPTIONS method to a resource for CORS preflight handling.
+
+        This creates a mock OPTIONS method that returns the CORS headers
+        directly from API Gateway without forwarding to the backend.
+
+        Args:
+            resource: The API Gateway resource to add the OPTIONS method to
+        """
+        # Create a mock integration for OPTIONS that returns static CORS headers
+        options_integration = apigateway.MockIntegration(
+            integration_responses=[
+                apigateway.IntegrationResponse(
+                    status_code="200",
+                    response_parameters={
+                        "method.response.header.Access-Control-Allow-Origin": "'*'",
+                        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Idempotency-Key,X-Requested-With'",
+                        "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                        "method.response.header.Access-Control-Max-Age": "'86400'",
+                    },
+                    response_templates={
+                        "application/json": '{"statusCode": 200}',
+                    },
+                ),
+            ],
+            passthrough_behavior=apigateway.PassthroughBehavior.NEVER,
+            request_templates={
+                "application/json": '{"statusCode": 200}',
+            },
+        )
+
+        resource.add_method(
+            "OPTIONS",
+            options_integration,
+            method_responses=[
+                apigateway.MethodResponse(
+                    status_code="200",
+                    response_parameters={
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Max-Age": True,
+                    },
+                    response_models={
+                        "application/json": apigateway.Model.EMPTY_MODEL,
+                    },
+                ),
+            ],
+        )
