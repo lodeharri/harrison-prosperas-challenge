@@ -140,35 +140,34 @@ jobs:
             --query 'Stacks[0].Outputs[?OutputKey==`APIUrl`].OutputValue' \
             --output text 2>/dev/null || echo "")
           
-          # Get ALB URL from compute stack
-          ALB_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_PREFIX }}-compute-stack \
-            --query 'Stacks[0].Outputs[?OutputKey==`APIServiceUrl`].OutputValue' \
+          # Get WebSocket Secure URL from CDN stack
+          WSS_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`WssUrl`].OutputValue' \
             --output text 2>/dev/null || echo "")
           
           echo "api-url=$API_URL" >> $GITHUB_OUTPUT
-          echo "alb-url=$ALB_URL" >> $GITHUB_OUTPUT
+          echo "wss-url=$WSS_URL" >> $GITHUB_OUTPUT
           
           if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then
             echo "❌ ERROR: Could not get API URL from CloudFormation"
             exit 1
           fi
           
-          if [ -z "$ALB_URL" ] || [ "$ALB_URL" = "None" ]; then
-            echo "❌ ERROR: Could not get ALB URL from CloudFormation"
+          if [ -z "$WSS_URL" ] || [ "$WSS_URL" = "None" ]; then
+            echo "❌ ERROR: Could not get WebSocket Secure URL from CloudFormation"
             exit 1
           fi
           
           echo "✅ Got API URL: $API_URL"
-          echo "✅ Got ALB URL: $ALB_URL"
+          echo "✅ Got WebSocket Secure URL: $WSS_URL"
 
       - name: Build frontend with API URLs
         env:
           VITE_API_URL: ${{ steps.get-urls.outputs.api-url }}
-          VITE_WS_URL: ${{ steps.get-urls.outputs.alb-url }}
+          VITE_WS_URL: ${{ steps.get-urls.outputs.wss-url }}
         run: |
           cd frontend
-          export VITE_WS_URL=$(echo "$VITE_WS_URL" | sed 's|http://|ws://|')
           echo "Building with VITE_API_URL=$VITE_API_URL"
           echo "Building with VITE_WS_URL=$VITE_WS_URL"
           npm run build
@@ -412,14 +411,13 @@ jobs:
             echo "- **Health Check**: \`$BASE_URL/health\`" >> $GITHUB_STEP_SUMMARY
           fi
           
-          ALB_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_PREFIX }}-compute-stack \
-            --query 'Stacks[0].Outputs[?OutputKey==`APIServiceUrl`].OutputValue' \
+          WSS_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`WssUrl`].OutputValue' \
             --output text 2>/dev/null || echo "")
           
-          if [ -n "$ALB_URL" ] && [ "$ALB_URL" != "None" ]; then
-            WS_URL=$(echo "$ALB_URL" | sed 's|http://|ws://|')/ws
-            echo "- **WebSocket URL**: \`$WS_URL\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$WSS_URL" ] && [ "$WSS_URL" != "None" ]; then
+            echo "- **WebSocket Secure URL**: \`$WSS_URL\`" >> $GITHUB_STEP_SUMMARY
           fi
           
           CLOUDFRONT_ID="${{ steps.get-cloudfront.outputs.distribution-id || '' }}"
