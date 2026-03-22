@@ -119,15 +119,23 @@ def synth_app() -> cdk.App:
     # =======================================================================
     # CDN Stack: S3 + CloudFront
     # =======================================================================
-    CDNStack(
+    # Get ALB URL from compute stack for WebSocket
+    alb_url = f"http://{compute_stack.api_service.load_balancer.load_balancer_dns_name}:8000"
+    
+    cdn_stack = CDNStack(
         app,
         f"{stack_prefix}-cdn-stack",
         stack_name=f"{stack_prefix}-cdn-stack",
         env=env,
         stack_prefix=stack_prefix,
         api_url=api_stack.api_url,
-        description="S3 static hosting with CloudFront CDN for frontend",
+        alb_url=alb_url,
+        description="S3 static hosting with CloudFront CDN for frontend and WebSocket proxy",
     )
+
+    # Add dependency: CDN needs API URL and ALB URL
+    cdn_stack.add_dependency(api_stack)
+    cdn_stack.add_dependency(compute_stack)
 
     # Output configuration
     cdk.Tags.of(app).add("Project", "RetoProsperas")

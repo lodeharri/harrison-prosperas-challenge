@@ -165,7 +165,7 @@ jobs:
       api-url: ${{ steps.cdk-outputs.outputs.api-url }}
       frontend-bucket: ${{ steps.cdk-outputs.outputs.frontend-bucket }}
       cloudfront-id: ${{ steps.cdk-outputs.outputs.cloudfront-id }}
-      websocket-url: ${{ steps.cdk-outputs.outputs.websocket-url }}
+      alb-url: ${{ steps.cdk-outputs.outputs.alb-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -212,11 +212,23 @@ jobs:
           # Synthesize API stack and extract API URL
           API_URL=""
           CLOUDFRONT_ID=""
+          ALB_URL=""
           
           # Create temporary directory for synthesis
           mkdir -p /tmp/cdk-synth
           
-          # Synthesize API stack
+          # Synthesize Compute stack first to get ALB URL
+          if cdk synth ${{ env.STACK_PREFIX }}-compute-stack --quiet --output /tmp/cdk-synth 2>/dev/null; then
+            # Look for APIServiceUrl output in the synthesized template
+            # This is the ALB DNS name (format: http://<dns-name>:8000)
+            ALB_URL=$(grep -r '"APIServiceUrl"' /tmp/cdk-synth/*.template.json 2>/dev/null | \
+              grep -A 5 '"Value"' | grep '"Value"' | \
+              sed 's/.*"Value": "//' | sed 's/".*//' | head -1 || echo "")
+            
+            echo "ALB URL from compute stack: $ALB_URL"
+          fi
+          
+          # Synthesize API stack and extract API Gateway URL
           if cdk synth ${{ env.STACK_PREFIX }}-api-stack --quiet --output /tmp/cdk-synth 2>/dev/null; then
             # Look for APIUrl output in the synthesized template
             API_URL=$(grep -r '"APIUrl"' /tmp/cdk-synth/*.template.json 2>/dev/null | \
@@ -252,6 +264,7 @@ jobs:
             if cdk list --all --outputs-file /tmp/cdk-outputs.json 2>/dev/null; then
               if [ -f /tmp/cdk-outputs.json ]; then
                 API_URL=$(jq -r '.[]."${{ env.STACK_PREFIX }}-api-stack".APIUrl // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
+                ALB_URL=$(jq -r '.[]."${{ env.STACK_PREFIX }}-compute-stack".APIServiceUrl // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
                 CLOUDFRONT_ID=$(jq -r '.[]."${{ env.STACK_PREFIX }}-cdn-stack".CloudFrontDistributionId // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
               fi
             fi
@@ -279,28 +292,9 @@ jobs:
             API_URL=$(echo "$API_URL" | sed 's|/$||')
           fi
           
-          # Generate WebSocket URL from API URL
-          WEBSOCKET_URL=""
-          if [[ -n "$API_URL" ]]; then
-            # Extract base URL (remove /jobs suffix if present)
-            BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||' | sed 's|/prod.*||')
-            
-            # Convert https:// to wss:// and add /prod/ws
-            # API Gateway WebSocket URL format: wss://{api-id}.execute-api.{region}.amazonaws.com/prod
-            WEBSOCKET_URL=$(echo "$BASE_URL" | sed 's|https://|wss://|')
-            
-            # Ensure we have the /prod stage
-            if [[ ! "$WEBSOCKET_URL" =~ /prod$ ]]; then
-              WEBSOCKET_URL="$WEBSOCKET_URL/prod"
-            fi
-            
-            # Add /ws path for WebSocket connections
-            WEBSOCKET_URL="$WEBSOCKET_URL/ws"
-          fi
-          
           echo "=== CDK Outputs ==="
           echo "API URL: $API_URL"
-          echo "WebSocket URL: $WEBSOCKET_URL"
+          echo "ALB URL (for WebSocket): $ALB_URL"
           echo "CloudFront ID: $CLOUDFRONT_ID"
           echo "=================="
           
@@ -308,7 +302,7 @@ jobs:
           echo "api-url=$API_URL" >> $GITHUB_OUTPUT
           echo "frontend-bucket=${{ env.FRONTEND_BUCKET }}" >> $GITHUB_OUTPUT
           echo "cloudfront-id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
-          echo "websocket-url=$WEBSOCKET_URL" >> $GITHUB_OUTPUT
+          echo "alb-url=$ALB_URL" >> $GITHUB_OUTPUT
 
   # ============================================
   # Job 3: Build frontend with correct API URL
@@ -331,12 +325,17 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
-      - name: Build frontend with API URL
+      - name: Build frontend with API URLs
         env:
+          # REST API URL from API Gateway
           VITE_API_URL: ${{ needs.cdk-synth.outputs.api-url }}
-          VITE_WS_URL: ${{ needs.cdk-synth.outputs.websocket-url }}
+          # WebSocket URL from ALB (convert http:// to ws://)
+          VITE_WS_URL: ${{ needs.cdk-synth.outputs.alb-url }}
         run: |
           cd frontend
+          # Replace http:// with ws:// for WebSocket connection
+          # Frontend connects to ws://<alb-dns>:8000, WebSocket endpoint is /ws/jobs
+          export VITE_WS_URL=$(echo "$VITE_WS_URL" | sed 's|http://|ws://|')
           npm run build
 
       - name: Upload frontend artifact
@@ -842,6 +841,14 @@ jobs:
           
           # Get API URL from the api-endpoint step
           API_URL="${{ steps.api-endpoint.outputs.api-url }}"
+          
+          # Get ALB URL from compute stack for WebSocket
+          ALB_URL=""
+          ALB_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-compute-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`APIServiceUrl`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
           if [ -n "$API_URL" ] && [ "$API_URL" != "null" ]; then
             # Extract base URL from the API URL
             BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||' | sed 's|/prod.*||')
@@ -849,9 +856,11 @@ jobs:
             echo "- **Jobs Endpoint**: \`$API_URL\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Health Check**: \`$BASE_URL/prod/health\`" >> $GITHUB_STEP_SUMMARY
             
-            # WebSocket URL
-            WEBSOCKET_URL=$(echo "$BASE_URL" | sed 's|https://|wss://|')/prod/ws
-            echo "- **WebSocket URL**: \`$WEBSOCKET_URL\`" >> $GITHUB_STEP_SUMMARY
+            # WebSocket URL from ALB
+            if [ -n "$ALB_URL" ] && [ "$ALB_URL" != "None" ]; then
+              WS_URL=$(echo "$ALB_URL" | sed 's|http://|ws://|')/ws
+              echo "- **WebSocket URL (ALB)**: \`$WS_URL\`" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "- **API URL**: Could not retrieve from CloudFormation" >> $GITHUB_STEP_SUMMARY
           fi

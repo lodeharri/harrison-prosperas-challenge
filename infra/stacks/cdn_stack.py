@@ -44,11 +44,13 @@ class CDNStack(Stack):
         scope: Construct,
         construct_id: str,
         api_url: str = "",
+        alb_url: str = "",
         stack_prefix: str = "harrison",
         **kwargs,
     ) -> None:
         self.stack_prefix = stack_prefix
         self.api_url = api_url
+        self.alb_url = alb_url
 
         super().__init__(scope, construct_id, **kwargs)
 
@@ -171,7 +173,7 @@ class CDNStack(Stack):
 
     def _create_cloudfront_distribution(self) -> cloudfront.CfnDistribution:
         """
-        Create CloudFront distribution with S3 origin.
+        Create CloudFront distribution with S3 origin and ALB origin for WebSocket.
 
         Configuration:
             - Price class: North America + Europe (cost optimization)
@@ -180,72 +182,131 @@ class CDNStack(Stack):
             - Max TTL: 31536000 (1 year)
             - Viewer Protocol Policy: Redirect HTTP to HTTPS
             - Compress: Enabled (gzip/brotli)
+            - WebSocket behavior: /ws/* path pattern with caching disabled
         """
         # Create CloudFront function for SPA routing
         spa_routing_function = self._create_spa_routing_function()
 
+        # Parse ALB URL to get domain name and port
+        alb_domain = ""
+        if self.alb_url:
+            # Parse http://alb-dns-name:8000
+            import re
+
+            match = re.match(r"https?://([^:/]+)(?::(\d+))?", self.alb_url)
+            if match:
+                alb_domain = match.group(1)
+                alb_port = int(match.group(2)) if match.group(2) else 80
+            else:
+                alb_domain = self.alb_url
+                alb_port = 80
+        else:
+            alb_domain = ""
+            alb_port = 80
+
+        # Create origins list
+        origins = [
+            cloudfront.CfnDistribution.OriginProperty(
+                id="frontend",
+                domain_name=self.bucket.bucket_domain_name,
+                s3_origin_config=cloudfront.CfnDistribution.S3OriginConfigProperty(
+                    origin_access_identity=(
+                        f"origin-access-identity/cloudfront/{self.oai.origin_access_identity_id}"
+                    ),
+                ),
+                connection_attempts=3,
+                connection_timeout=10,
+            )
+        ]
+
+        # Add ALB origin if ALB URL is provided
+        if alb_domain:
+            origins.append(
+                cloudfront.CfnDistribution.OriginProperty(
+                    id="alb",
+                    domain_name=alb_domain,
+                    custom_origin_config=cloudfront.CfnDistribution.CustomOriginConfigProperty(
+                        origin_protocol_policy="http-only",
+                        http_port=alb_port,
+                        https_port=alb_port,
+                        origin_ssl_protocols=["TLSv1.2"],
+                    ),
+                    connection_attempts=3,
+                    connection_timeout=10,
+                )
+            )
+
+        # Create cache behaviors list
+        cache_behaviors = []
+        
+        # Add WebSocket behavior if ALB origin exists
+        if alb_domain:
+            cache_behaviors.append(
+                cloudfront.CfnDistribution.CacheBehaviorProperty(
+                    path_pattern="/ws/*",
+                    target_origin_id="alb",
+                    viewer_protocol_policy="https-only",
+                    allowed_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"],
+                    cached_methods=["GET", "HEAD"],
+                    cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",  # CachingDisabled
+                    origin_request_policy_id="216adef6-5c7f-47e4-b989-5492eafa07d3",  # AllViewer
+                    compress=False,
+                    smooth_streaming=False,
+                )
+            )
+
+        distribution_config = cloudfront.CfnDistribution.DistributionConfigProperty(
+            enabled=True,
+            comment=f"CloudFront distribution for {self.stack_prefix} frontend with WebSocket support",
+            price_class="PriceClass_100",  # NA + EU
+            http_version="http2and3",
+            default_root_object="index.html",
+            viewer_certificate=cloudfront.CfnDistribution.ViewerCertificateProperty(
+                cloud_front_default_certificate=True,
+            ),
+            origins=origins,
+            default_cache_behavior=cloudfront.CfnDistribution.DefaultCacheBehaviorProperty(
+                target_origin_id="frontend",
+                viewer_protocol_policy="redirect-to-https",
+                compress=True,
+                allowed_methods=["GET", "HEAD", "OPTIONS"],
+                cached_methods=["GET", "HEAD", "OPTIONS"],
+                default_ttl=Duration.days(1).to_seconds(),
+                min_ttl=Duration.hours(1).to_seconds(),
+                max_ttl=Duration.days(365).to_seconds(),
+                function_associations=[
+                    cloudfront.CfnDistribution.FunctionAssociationProperty(
+                        function_arn=spa_routing_function.function_arn,
+                        event_type="viewer-request",
+                    )
+                ],
+                forwarded_values=cloudfront.CfnDistribution.ForwardedValuesProperty(
+                    query_string=False,
+                    headers=["Accept", "Origin"],
+                    cookies=cloudfront.CfnDistribution.CookiesProperty(
+                        forward="none",
+                    ),
+                ),
+            ),
+            cache_behaviors=cache_behaviors if cache_behaviors else None,
+            custom_error_responses=[
+                cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                    error_code=403,
+                    response_code=200,
+                    response_page_path="/index.html",
+                ),
+                cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                    error_code=404,
+                    response_code=200,
+                    response_page_path="/index.html",
+                ),
+            ],
+        )
+
         distribution = cloudfront.CfnDistribution(
             self,
             "FrontendDistribution",
-            distribution_config=cloudfront.CfnDistribution.DistributionConfigProperty(
-                enabled=True,
-                comment=f"CloudFront distribution for {self.stack_prefix} frontend",
-                price_class="PriceClass_100",  # NA + EU
-                http_version="http2and3",
-                default_root_object="index.html",
-                viewer_certificate=cloudfront.CfnDistribution.ViewerCertificateProperty(
-                    cloud_front_default_certificate=True,
-                ),
-                # CDK v2: Use 'origins' and 'default_cache_behavior' separately
-                origins=[
-                    cloudfront.CfnDistribution.OriginProperty(
-                        id="frontend",
-                        domain_name=self.bucket.bucket_domain_name,
-                        s3_origin_config=cloudfront.CfnDistribution.S3OriginConfigProperty(
-                            origin_access_identity=(
-                                f"origin-access-identity/cloudfront/{self.oai.origin_access_identity_id}"
-                            ),
-                        ),
-                        connection_attempts=3,
-                        connection_timeout=10,
-                    )
-                ],
-                default_cache_behavior=cloudfront.CfnDistribution.DefaultCacheBehaviorProperty(
-                    target_origin_id="frontend",
-                    viewer_protocol_policy="redirect-to-https",
-                    compress=True,
-                    allowed_methods=["GET", "HEAD", "OPTIONS"],
-                    cached_methods=["GET", "HEAD", "OPTIONS"],
-                    default_ttl=Duration.days(1).to_seconds(),
-                    min_ttl=Duration.hours(1).to_seconds(),
-                    max_ttl=Duration.days(365).to_seconds(),
-                    function_associations=[
-                        cloudfront.CfnDistribution.FunctionAssociationProperty(
-                            function_arn=spa_routing_function.function_arn,
-                            event_type="viewer-request",
-                        )
-                    ],
-                    forwarded_values=cloudfront.CfnDistribution.ForwardedValuesProperty(
-                        query_string=False,
-                        headers=["Accept", "Origin"],
-                        cookies=cloudfront.CfnDistribution.CookiesProperty(
-                            forward="none",
-                        ),
-                    ),
-                ),
-                custom_error_responses=[
-                    cloudfront.CfnDistribution.CustomErrorResponseProperty(
-                        error_code=403,
-                        response_code=200,
-                        response_page_path="/index.html",
-                    ),
-                    cloudfront.CfnDistribution.CustomErrorResponseProperty(
-                        error_code=404,
-                        response_code=200,
-                        response_page_path="/index.html",
-                    ),
-                ],
-            ),
+            distribution_config=distribution_config,
         )
 
         CfnOutput(
@@ -349,7 +410,10 @@ function handler(event) {
 
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs."""
-
+        # Get CloudFront domain name
+        cf_domain = self.distribution.attr_domain_name
+        
+        # Frontend URL (HTTPS)
         CfnOutput(
             self,
             "FrontendBucketWebsiteUrl",
@@ -360,14 +424,28 @@ function handler(event) {
         CfnOutput(
             self,
             "FrontendUrl",
-            value=f"https://{self.distribution.attr_domain_name}",
+            value=f"https://{cf_domain}",
             export_name="HarrisonFrontendUrl",
         ).override_logical_id("FrontendUrl")
+        
+        # WebSocket Secure URL (WSS)
+        CfnOutput(
+            self,
+            "WssUrl",
+            value=f"wss://{cf_domain}/ws/jobs",
+            description="WebSocket Secure URL for frontend (WSS)",
+            export_name="HarrisonWssUrl",
+        ).override_logical_id("WssUrl")
 
     @property
     def distribution_url(self) -> str:
         """Get the CloudFront distribution URL."""
         return f"https://{self.distribution.attr_domain_name}"
+    
+    @property
+    def wss_url(self) -> str:
+        """Get the WebSocket Secure URL."""
+        return f"wss://{self.distribution.attr_domain_name}/ws/jobs"
 
     @property
     def bucket_name(self) -> str:

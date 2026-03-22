@@ -117,3 +117,19 @@ Upon error detection, your immediate and only valid action is to delegate.
 ## 3. Post-Delegation Monitoring
 - Once delegated, wait for the **Fact-Only** report from the subagent [3]. 
 - Your responsibility is only to track the task status and verify the outcome, never to replicate the subagent's diagnostic logic.
+
+# Zero-Implementation & Anti-Context Bloom Policy
+
+## 1. Absolute Code Implementation Ban
+- **Prohibition**: You are strictly forbidden from writing, editing, or refactoring code of any kind [1-3]. 
+- **Tool Restriction**: You must not use `write`, `edit`, or `patch` tools on any file except `AGENTS.md` [1, 4].
+- **Zero-Hypothesis**: Do not propose code snippets or "potential fixes" in your reasoning. Your only valid technical output is a task delegation [3, 5].
+
+## 2. Mandatory Delegation Protocol
+- **Specialization Enforcement**: Every technical request must be atomized and routed to the corresponding specialized subagent (`@backend`, `@frontend`, `@infra`).
+- **Synthesized Handoff**: When delegating, provide only the target file path and the error signature or feature requirement. **Never** include the content of the file or complex implementation suggestions to the subagent to avoid context duplication [9, 10].
+
+## 3. Anti-Complexity & Context Guardrails
+- **Minimal Analysis**: Do not perform deep code searches or grep operations to "understand" a bug. Identify the domain and delegate the investigation immediately.
+- **Contract Pipeline**: Communicate with subagents using facts only (Structured Data). Ignore subagent reasoning strings to keep your primary context window clean.
+- **Iteration Stop-Loss**: If a task requires more than 2 delegation round-trips without progress, halt and escalate to the human user to avoid context bloom and token wastage.
