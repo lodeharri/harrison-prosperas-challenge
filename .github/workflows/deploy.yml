@@ -67,13 +67,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  cdk-synth:
-    name: Synthesize CDK
+  validate-cdk:
+    name: Validate CDK Templates
     runs-on: ubuntu-latest
-    outputs:
-      api-url: ${{ steps.cdk-outputs.outputs.api-url }}
-      alb-url: ${{ steps.cdk-outputs.outputs.alb-url }}
-      cloudfront-id: ${{ steps.cdk-outputs.outputs.cloudfront-id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,30 +100,26 @@ jobs:
           npm install
           pip install -r requirements.txt
 
-      - name: Get CDK outputs
-        id: cdk-outputs
+      - name: Synthesize CDK templates
         run: |
           cd infra
-          
-          # Deploy with outputs file
-          npx cdk deploy --all --require-approval never --outputs-file /tmp/cdk-outputs.json 2>/dev/null || true
-          
-          # Extract outputs from file
-          API_URL=$(jq -r '."${{ env.STACK_PREFIX }}-api-stack".APIUrl // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
-          ALB_URL=$(jq -r '."${{ env.STACK_PREFIX }}-compute-stack".APIServiceUrl // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
-          CLOUDFRONT_ID=$(jq -r '."${{ env.STACK_PREFIX }}-cdn-stack".DistributionId // empty' /tmp/cdk-outputs.json 2>/dev/null || echo "")
-          
-          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
-          echo "alb-url=$ALB_URL" >> $GITHUB_OUTPUT
-          echo "cloudfront-id=$CLOUDFRONT_ID" >> $GITHUB_OUTPUT
+          npx cdk synth --all
+          echo "✅ CDK templates synthesized successfully"
 
   build-frontend:
     name: Build Frontend
     runs-on: ubuntu-latest
-    needs: cdk-synth
+    needs: deploy-cdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -139,13 +131,46 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
+      - name: Get deployed URLs from CloudFormation
+        id: get-urls
+        run: |
+          # Get API Gateway URL from API stack
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-api-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`APIUrl`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          # Get ALB URL from compute stack
+          ALB_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-compute-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`APIServiceUrl`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
+          echo "alb-url=$ALB_URL" >> $GITHUB_OUTPUT
+          
+          if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then
+            echo "❌ ERROR: Could not get API URL from CloudFormation"
+            exit 1
+          fi
+          
+          if [ -z "$ALB_URL" ] || [ "$ALB_URL" = "None" ]; then
+            echo "❌ ERROR: Could not get ALB URL from CloudFormation"
+            exit 1
+          fi
+          
+          echo "✅ Got API URL: $API_URL"
+          echo "✅ Got ALB URL: $ALB_URL"
+
       - name: Build frontend with API URLs
         env:
-          VITE_API_URL: ${{ needs.cdk-synth.outputs.api-url }}
-          VITE_WS_URL: ${{ needs.cdk-synth.outputs.alb-url }}
+          VITE_API_URL: ${{ steps.get-urls.outputs.api-url }}
+          VITE_WS_URL: ${{ steps.get-urls.outputs.alb-url }}
         run: |
           cd frontend
           export VITE_WS_URL=$(echo "$VITE_WS_URL" | sed 's|http://|ws://|')
+          echo "Building with VITE_API_URL=$VITE_API_URL"
+          echo "Building with VITE_WS_URL=$VITE_WS_URL"
           npm run build
 
       - name: Upload frontend artifact
@@ -158,7 +183,7 @@ jobs:
   deploy-cdk:
     name: Deploy CDK Infrastructure
     runs-on: ubuntu-latest
-    needs: [build-ecr, cdk-synth]
+    needs: build-ecr
     steps:
       - name: Checkout
         uses: actions/checkout@v4
