@@ -109,6 +109,8 @@ class ProcessingMetrics:
 class JobProcessor:
     """Main job processor with concurrency and error handling."""
 
+    GRACEFUL_SHUTDOWN_TIMEOUT = 10  # seconds to wait for active jobs
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -123,6 +125,7 @@ class JobProcessor:
         self.http = http_client or get_http_client()
         self.running = False
         self.metrics = ProcessingMetrics()
+        self._active_tasks: set[asyncio.Task[bool]] = set()
 
         # Initialize circuit breaker
         self.circuit_breaker = CircuitBreaker(
@@ -402,8 +405,16 @@ class JobProcessor:
 
     async def _bounded_process(self, message: dict[str, Any]) -> bool:
         """Process a message with semaphore for bounded concurrency."""
-        async with self.semaphore:
-            return await self.process_single_job(message)
+        task = asyncio.current_task()
+        if task:
+            self._active_tasks.add(task)
+        try:
+            async with self.semaphore:
+                result = await self.process_single_job(message)
+            return result
+        finally:
+            if task:
+                self._active_tasks.discard(task)
 
     async def run(self) -> None:
         """Main worker loop that prefers high-priority jobs."""
@@ -511,10 +522,60 @@ class JobProcessor:
 
     async def stop(self) -> None:
         """Stop the worker gracefully."""
+        logger.info(
+            "stop_initiated",
+            active_jobs=len(self._active_tasks),
+        )
+
+        # First, stop accepting new jobs
         self.running = False
+
+        # Log active jobs and wait for them to complete
+        if self._active_tasks:
+            logger.info(
+                "waiting_for_active_jobs",
+                active_job_count=len(self._active_tasks),
+                timeout_seconds=self.GRACEFUL_SHUTDOWN_TIMEOUT,
+            )
+
+            try:
+                # Wait for active tasks with timeout
+                done, pending = await asyncio.wait(
+                    self._active_tasks,
+                    timeout=self.GRACEFUL_SHUTDOWN_TIMEOUT,
+                    return_when=asyncio.ALL_COMPLETED,
+                )
+
+                if pending:
+                    logger.warning(
+                        "active_jobs_not_completed",
+                        pending_count=len(pending),
+                        message="Forcing shutdown with jobs still running",
+                    )
+                else:
+                    logger.info(
+                        "all_active_jobs_completed",
+                        completed_count=len(done),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "error_waiting_for_jobs",
+                    error=str(e),
+                )
+
+        # Log final active jobs status
+        if self._active_tasks:
+            logger.warning(
+                "active_jobs_during_shutdown",
+                active_job_count=len(self._active_tasks),
+            )
+
+        # Close connections
         await self.sqs.close()
         await self.dynamodb.close()
         await self.http.close()
+
+        logger.info("stop_completed")
 
     async def health_check(self) -> dict[str, Any]:
         """Check health of worker and dependencies."""

@@ -106,3 +106,30 @@
 ## Project Status
 - Current Milestone: Scaffolding
 - Last Update: Agentic Orchestrator initialized.
+
+
+## Se debe implementar los siguientes artefactos con las especificaciones descritas
+
+Artefacto 1 — TECHNICAL_DOCS.md
+Generado con IA a partir del código del proyecto. Debe documentar el sistema de forma completa —
+útil para un desarrollador nuevo que nunca lo vio. Contenido mínimo esperado:
+• Diagrama de arquitectura (ASCII art o Mermaid) con todos los componentes y el flujo de datos
+• Tabla de servicios AWS utilizados: qué servicio, para qué, y por qué se eligió sobre alternativas
+• Decisiones de diseño relevantes: trade-offs considerados y alternativas descartadas
+• Guía de setup local: pasos exactos para levantar el entorno con LocalStack desde cero
+• Guía de despliegue: cómo funciona el pipeline y qué hace cada step
+• Variables de entorno: descripción de cada variable del .env.example
+• Instrucciones para ejecutar los tests y qué cubre cada suite
+
+
+Artefacto 2 — SKILL.md
+Un archivo diseñado específicamente para ser inyectado como contexto en un agente de IA al trabajar
+con este proyecto. La IA que lo lea debe poder operar sobre el código sin necesidad de leer cada
+archivo. Debe incluir como mínimo:
+• Descripción del sistema: qué hace, cómo funciona, qué problema resuelve
+• Mapa del repositorio: qué hay en cada carpeta y para qué sirve cada módulo
+• Patrones del proyecto: cómo agregar una nueva ruta, cómo publicar a la cola, cómo leer el
+estado de un job
+• Comandos frecuentes: levantar local, correr tests, hacer deploy manual, ver logs
+• Errores comunes y cómo resolverlos
+• Sección &#39;cómo extender&#39;: instrucciones paso a paso para agregar un nuevo tipo de reporte

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { JobDetail } from './pages/JobDetail';
 import { apiService } from './services/api';
 
 function App() {
@@ -15,10 +17,34 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  return isAuthenticated ? (
-    <Dashboard onLogout={handleLogout} />
-  ) : (
-    <Login onLogin={handleLogin} />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            isAuthenticated ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />
+          }
+        />
+        <Route
+          path="/jobs/:id"
+          element={
+            isAuthenticated ? <JobDetail /> : <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Dashboard onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

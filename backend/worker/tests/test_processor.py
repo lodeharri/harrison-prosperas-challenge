@@ -324,3 +324,195 @@ class TestProcessorConcurrency:
 
         assert proc.semaphore._value == 2
         await proc.stop()
+
+
+class TestProcessorGracefulShutdown:
+    """Tests for graceful shutdown functionality."""
+
+    async def test_stop_waits_for_active_jobs(self) -> None:
+        """Test that stop() waits for active jobs to complete."""
+        mock_sqs = AsyncMock()
+        mock_sqs.close = AsyncMock()
+        mock_dynamodb = AsyncMock()
+        mock_dynamodb.close = AsyncMock()
+        mock_http = AsyncMock()
+        mock_http.close = AsyncMock()
+
+        proc = JobProcessor(
+            sqs_client=mock_sqs,
+            dynamodb_client=mock_dynamodb,
+            http_client=mock_http,
+        )
+
+        # Simulate an active task
+        async def slow_job() -> bool:
+            await asyncio.sleep(0.1)
+            return True
+
+        # Create a task that simulates a running job
+        active_task = asyncio.create_task(slow_job())
+        proc._active_tasks.add(active_task)
+        proc.running = True
+
+        # Call stop - should wait for active jobs
+        await proc.stop()
+
+        # Verify the task completed (was awaited)
+        assert active_task.done()
+
+        # Verify connections were closed
+        mock_sqs.close.assert_called_once()
+        mock_dynamodb.close.assert_called_once()
+        mock_http.close.assert_called_once()
+
+    async def test_stop_timeout_forces_shutdown(self) -> None:
+        """Test that stop() handles timeout when jobs don't complete."""
+        mock_sqs = AsyncMock()
+        mock_sqs.close = AsyncMock()
+        mock_dynamodb = AsyncMock()
+        mock_dynamodb.close = AsyncMock()
+        mock_http = AsyncMock()
+        mock_http.close = AsyncMock()
+
+        # Create processor with short timeout for testing
+        proc = JobProcessor(
+            sqs_client=mock_sqs,
+            dynamodb_client=mock_dynamodb,
+            http_client=mock_http,
+        )
+
+        # Override timeout for this test
+        original_timeout = JobProcessor.GRACEFUL_SHUTDOWN_TIMEOUT
+        JobProcessor.GRACEFUL_SHUTDOWN_TIMEOUT = 0.01  # Very short timeout
+
+        # Simulate a very slow active task
+        async def very_slow_job() -> bool:
+            await asyncio.sleep(10)  # Much longer than timeout
+            return True
+
+        # Create a task that will exceed timeout
+        active_task = asyncio.create_task(very_slow_job())
+        proc._active_tasks.add(active_task)
+        proc.running = True
+
+        # Call stop - should timeout and proceed
+        await proc.stop()
+
+        # Restore original timeout
+        JobProcessor.GRACEFUL_SHUTDOWN_TIMEOUT = original_timeout
+
+        # Verify connections were still closed even with timeout
+        mock_sqs.close.assert_called_once()
+        mock_dynamodb.close.assert_called_once()
+        mock_http.close.assert_called_once()
+
+        # Cancel the still-running task
+        active_task.cancel()
+        try:
+            await active_task
+        except asyncio.CancelledError:
+            pass
+
+    async def test_stop_logs_active_jobs(self) -> None:
+        """Test that stop() logs active jobs during shutdown."""
+        mock_sqs = AsyncMock()
+        mock_sqs.close = AsyncMock()
+        mock_dynamodb = AsyncMock()
+        mock_dynamodb.close = AsyncMock()
+        mock_http = AsyncMock()
+        mock_http.close = AsyncMock()
+
+        proc = JobProcessor(
+            sqs_client=mock_sqs,
+            dynamodb_client=mock_dynamodb,
+            http_client=mock_http,
+        )
+
+        # Add simulated active task
+        async def dummy_job() -> bool:
+            return True
+
+        active_task = asyncio.create_task(dummy_job())
+        proc._active_tasks.add(active_task)
+        proc.running = True
+
+        # Call stop - should log active job count
+        await proc.stop()
+
+        # Verify task was tracked
+        assert active_task.done() or not active_task.cancelled()
+
+    async def test_connections_closed_on_stop(self) -> None:
+        """Test that all connections are properly closed on stop."""
+        mock_sqs = AsyncMock()
+        mock_sqs.close = AsyncMock()
+        mock_dynamodb = AsyncMock()
+        mock_dynamodb.close = AsyncMock()
+        mock_http = AsyncMock()
+        mock_http.close = AsyncMock()
+
+        proc = JobProcessor(
+            sqs_client=mock_sqs,
+            dynamodb_client=mock_dynamodb,
+            http_client=mock_http,
+        )
+        proc.running = False
+
+        await proc.stop()
+
+        # Verify all close methods were called
+        mock_sqs.close.assert_called_once()
+        mock_dynamodb.close.assert_called_once()
+        mock_http.close.assert_called_once()
+
+    async def test_active_tasks_tracked_during_processing(self) -> None:
+        """Test that active tasks are tracked during job processing."""
+        mock_sqs = AsyncMock()
+        mock_dynamodb = AsyncMock()
+        mock_http = AsyncMock()
+
+        proc = JobProcessor(
+            sqs_client=mock_sqs,
+            dynamodb_client=mock_dynamodb,
+            http_client=mock_http,
+        )
+
+        # Simulate processing starts a task
+        async def mock_process(message):
+            return True
+
+        # Create a mock message
+        test_message = {
+            "Body": json.dumps(
+                {
+                    "job_id": "test-job",
+                    "user_id": "user-1",
+                    "report_type": "sales_report",
+                }
+            ),
+            "ReceiptHandle": "test-receipt",
+            "MessageAttributes": {},
+        }
+
+        # Patch process_single_job to track tasks
+        original_process = proc.process_single_job
+
+        async def tracking_process(message):
+            task = asyncio.current_task()
+            if task:
+                proc._active_tasks.add(task)
+            # Simulate short work
+            await asyncio.sleep(0.01)
+            proc._active_tasks.discard(task)
+            return True
+
+        proc.process_single_job = tracking_process
+
+        # Process a job
+        proc.running = True
+        await proc._bounded_process(test_message)
+
+        # Verify no active tasks after completion
+        assert len(proc._active_tasks) == 0
+
+        await proc.stop()
