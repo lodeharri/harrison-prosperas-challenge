@@ -401,32 +401,18 @@ jobs:
             FRONTEND_URL="https://$FRONTEND_DOMAIN"
             echo "- **URL**: \`$FRONTEND_URL\`"
             echo "- **Direct link**: $FRONTEND_URL"
-            echo ""
-            echo "**Quick test**: Open the link above in your browser to verify the frontend is working."
           else
             echo "- **Status**: Could not retrieve frontend URL"
-            echo "- **Troubleshooting**: Check CloudFront distribution status in AWS Console"
           fi
           
           echo ""
-          echo "### 🔗 API Endpoints"
+          echo "### 🔗 Backend API URL"
           echo ""
           
           API_URL="${{ steps.api-endpoint.outputs.api-url }}"
           if [ -n "$API_URL" ] && [ "$API_URL" != "null" ]; then
             BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
-            echo "- **REST API**: \`$BASE_URL\`"
-            echo "- **Jobs Endpoint**: \`$API_URL\`"
-            echo "- **Health Check**: \`$BASE_URL/health\`"
-          fi
-          
-          WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
-            --query 'Stacks[0].Outputs[?OutputKey==`WssUrl`].OutputValue' \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -n "$WSS_URL" ] && [ "$WSS_URL" != "None" ]; then
-            echo "- **WebSocket**: \`$WSS_URL\`"
+            echo "- **URL**: \`$BASE_URL\`"
           fi
           
           echo ""
@@ -471,9 +457,17 @@ jobs:
               FRONTEND_URL="https://$FRONTEND_DOMAIN"
               echo "- **URL**: \`$FRONTEND_URL\`" >> $GITHUB_STEP_SUMMARY
               echo "- **Direct link**: [$FRONTEND_URL]($FRONTEND_URL)" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "**Quick test**: Open the link above in your browser to verify the frontend is working." >> $GITHUB_STEP_SUMMARY
             fi
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Backend API URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          API_URL="${{ steps.api-endpoint.outputs.api-url }}"
+          if [ -n "$API_URL" ] && [ "$API_URL" != "null" ]; then
+            BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
+            echo "- **URL**: \`$BASE_URL\`" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -94,7 +94,8 @@ Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB y
 
 | Servicio | URL | Propósito |
 |----------|-----|-----------|
-| Frontend | `https://<cloudfront>.cloudfront.net` | SPA React |
+| Frontend (Pruebas) | `https://d1n3v8uwwdhhlr.cloudfront.net/` | SPA React - Entorno de pruebas |
+| Frontend (Producción) | `https://<cloudfront>.cloudfront.net` | SPA React - Producción |
 | REST API | `https://<api-gw>.amazonaws.com/prod` | Endpoints REST |
 | WebSocket | `wss://<cloudfront>.cloudfront.net/ws/jobs` | Notificaciones en tiempo real |
 
