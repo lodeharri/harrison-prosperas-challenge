@@ -38,10 +38,13 @@ logger = structlog.get_logger()
 class WorkerManager:
     """Manages the worker lifecycle and graceful shutdown."""
 
+    SHUTDOWN_TIMEOUT_SECONDS = 30  # Maximum time to wait for graceful shutdown
+
     def __init__(self) -> None:
         self.processor: JobProcessor | None = None
         self.tasks: list[asyncio.Task[Any]] = []
         self.shutdown_event = asyncio.Event()
+        self._shutdown_with_timeout_setup = False
 
     async def start(self) -> None:
         """Start the worker and all background tasks."""
@@ -97,6 +100,13 @@ class WorkerManager:
         else:
             logger.info("shutdown_initiated")
 
+        # Setup safety timeout with signal.alarm
+        # This ensures shutdown doesn't hang indefinitely
+        if not self._shutdown_with_timeout_setup:
+            self._shutdown_with_timeout_setup = True
+            signal.signal(signal.SIGALRM, self._shutdown_timeout_handler)
+            signal.alarm(self.SHUTDOWN_TIMEOUT_SECONDS)
+
         self.shutdown_event.set()
 
         if self.processor:
@@ -110,7 +120,21 @@ class WorkerManager:
         if self.tasks:
             await asyncio.gather(*self.tasks, return_exceptions=True)
 
+        # Cancel safety timeout
+        signal.alarm(0)
         logger.info("shutdown_complete")
+
+    def _shutdown_timeout_handler(self, signum: int, frame: Any) -> None:
+        """Handle timeout during shutdown - forces exit."""
+        logger.warning(
+            "shutdown_timeout_forced",
+            timeout_seconds=self.SHUTDOWN_TIMEOUT_SECONDS,
+            message="Forcing worker shutdown due to timeout",
+        )
+        # Force exit - this is a last resort
+        import os
+
+        os._exit(1)
 
 
 async def run_worker() -> None:
