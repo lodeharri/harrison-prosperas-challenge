@@ -366,17 +366,316 @@ El usuario/rol de AWS debe tener:
     {
       "Effect": "Allow",
       "Action": [
-        "ecr:*",
-        "ecs:*",
-        "dynamodb:*",
-        "sqs:*",
-        "s3:*",
-        "apigateway:*",
-        "cloudfront:*",
-        "iam:*",
-        "logs:*",
-        "cloudwatch:*"
+        "cloudformation:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc",
+        "ec2:DeleteVpc",
+        "ec2:DescribeVpcs",
+        "ec2:CreateSubnet",
+        "ec2:DeleteSubnet",
+        "ec2:DescribeSubnets",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:DescribeSecurityGroups",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories",
+        "ecr:DeleteRepository",
+        "ecr:PutLifecyclePolicy",
+        "ecr:GetLifecyclePolicy",
+        "ecr:DeleteLifecyclePolicy",
+        "ecr:SetRepositoryPolicy",
+        "ecr:GetRepositoryPolicy",
+        "ecr:DeleteRepositoryPolicy",
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:BatchGetImage",
+        "ecr:BatchDeleteImage"
+      ],
+      "Resource": "arn:aws:ecr:*:*:repository/harrison-prospera-challenge"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:DeleteCluster",
+        "ecs:DescribeClusters",
+        "ecs:CreateService",
+        "ecs:DeleteService",
+        "ecs:DescribeServices",
+        "ecs:UpdateService",
+        "ecs:CreateTaskDefinition",
+        "ecs:DeleteTaskDefinition",
+        "ecs:DescribeTaskDefinition",
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:RunTask",
+        "ecs:StopTask",
+        "ecs:DescribeTasks",
+        "ecs:ListTasks",
+        "ecs:ListServices",
+        "ecs:ListTaskDefinitions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:CreateTable",
+        "dynamodb:DeleteTable",
+        "dynamodb:DescribeTable",
+        "dynamodb:UpdateTable",
+        "dynamodb:ListTables",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:BatchGetItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:*:*:table/harrison-jobs",
+        "arn:aws:dynamodb:*:*:table/harrison-jobs/index/*",
+        "arn:aws:dynamodb:*:*:table/harrison-idempotency"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue",
+        "sqs:DeleteQueue",
+        "sqs:GetQueueUrl",
+        "sqs:GetQueueAttributes",
+        "sqs:SetQueueAttributes",
+        "sqs:ListQueues",
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:PurgeQueue"
+      ],
+      "Resource": [
+        "arn:aws:sqs:*:*:harrison-jobs-queue",
+        "arn:aws:sqs:*:*:harrison-jobs-dlq",
+        "arn:aws:sqs:*:*:harrison-jobs-priority"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:GetBucketPolicy",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:GetBucketWebsite",
+        "s3:PutBucketWebsite",
+        "s3:DeleteBucketWebsite",
+        "s3:GetBucketCors",
+        "s3:PutBucketCors",
+        "s3:DeleteBucketCors",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning"
+      ],
+      "Resource": [
+        "arn:aws:s3:::harrison-frontend",
+        "arn:aws:s3:::harrison-frontend/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:GET",
+        "apigateway:PUT",
+        "apigateway:DELETE",
+        "apigateway:PATCH",
+        "apigateway:CreateRestApi",
+        "apigateway:DeleteRestApi",
+        "apigateway:GetRestApi",
+        "apigateway:GetRestApis",
+        "apigateway:CreateResource",
+        "apigateway:DeleteResource",
+        "apigateway:GetResource",
+        "apigateway:GetResources",
+        "apigateway:CreateMethod",
+        "apigateway:DeleteMethod",
+        "apigateway:GetMethod",
+        "apigateway:GetMethodResponse",
+        "apigateway:PutMethodResponse",
+        "apigateway:CreateIntegration",
+        "apigateway:DeleteIntegration",
+        "apigateway:GetIntegration",
+        "apigateway:GetIntegrationResponse",
+        "apigateway:PutIntegrationResponse",
+        "apigateway:CreateDeployment",
+        "apigateway:DeleteDeployment",
+        "apigateway:GetDeployment",
+        "apigateway:GetDeployments",
+        "apigateway:CreateStage",
+        "apigateway:DeleteStage",
+        "apigateway:GetStage",
+        "apigateway:GetStages",
+        "apigateway:UpdateStage",
+        "apigateway:CreateUsagePlan",
+        "apigateway:DeleteUsagePlan",
+        "apigateway:GetUsagePlan",
+        "apigateway:GetUsagePlans",
+        "apigateway:CreateApiKey",
+        "apigateway:DeleteApiKey",
+        "apigateway:GetApiKey",
+        "apigateway:GetApiKeys",
+        "apigateway:UpdateApiKey"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:ListDistributions",
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations",
+        "cloudfront:CreateCloudFrontOriginAccessIdentity",
+        "cloudfront:DeleteCloudFrontOriginAccessIdentity",
+        "cloudfront:GetCloudFrontOriginAccessIdentity",
+        "cloudfront:GetCloudFrontOriginAccessIdentityConfig",
+        "cloudfront:UpdateCloudFrontOriginAccessIdentity",
+        "cloudfront:ListCloudFrontOriginAccessIdentities",
+        "cloudfront:CreateFunction",
+        "cloudfront:DeleteFunction",
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction",
+        "cloudfront:ListFunctions",
+        "cloudfront:PublishFunction",
+        "cloudfront:TestFunction",
+        "cloudfront:UpdateFunction"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:PassRole",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:ListRoles",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/harrison-*",
+        "arn:aws:iam::*:policy/harrison-*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DescribeLogGroups",
+        "logs:CreateLogStream",
+        "logs:DeleteLogStream",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:log-group:/harrison/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:ListSecrets",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:*:secret:harrison-jwt-secret-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:DeleteTargetGroup",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:DeleteListener",
+        "elasticloadbalancing:DescribeListeners",
+        "elasticloadbalancing:ModifyListener",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "elasticloadbalancing:SetSecurityGroups",
+        "elasticloadbalancing:SetSubnets"
+      ],
+      "Resource": "*"
     }
   ]
 }

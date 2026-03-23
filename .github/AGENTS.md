@@ -138,48 +138,84 @@ gh variable set CI_WS_URL --body "ws://localhost:8000"
 
 ## IAM Permissions Required
 
-The AWS credentials need the following permissions:
+The AWS credentials need the following permissions (full policy in README.md):
 
-### ECR
-- `ecr:CreateRepository` (first run only)
-- `ecr:GetAuthorizationToken`
-- `ecr:DescribeImages`
-- `ecr:BatchCheckLayerAvailability`
-- `ecr:GetDownloadUrlForLayer`
-- `ecr:BatchGetImage`
-- `ecr:PutImage`
-- `ecr:InitiateLayerUpload`
-- `ecr:UploadLayerPart`
-- `ecr:CompleteLayerUpload`
+### Core Deployment Permissions
+- `cloudformation:*` - Full CloudFormation access for stack management
+- `sts:GetCallerIdentity` - For identity verification
 
-### CDK
-- `cloudformation:CreateChangeSet`
-- `cloudformation:DescribeChangeSet`
-- `cloudformation:ExecuteChangeSet`
-- `cloudformation:DeleteStack`
-- `cloudformation:DescribeStacks`
-- `iam:CreateRole`
-- `iam:AttachRolePolicy`
-- `iam:PassRole`
-- `ecs:CreateService`
-- `ecs:DescribeServices`
-- `ecs:UpdateService`
-- `dynamodb:CreateTable`
-- `dynamodb:DescribeTable`
-- `sqs:CreateQueue`
-- `sqs:GetQueueUrl`
-- `sqs:SetQueueAttributes`
+### Networking (EC2/VPC)
+- `ec2:CreateVpc`, `ec2:DeleteVpc`, `ec2:DescribeVpcs`
+- `ec2:CreateSubnet`, `ec2:DeleteSubnet`, `ec2:DescribeSubnets`
+- `ec2:CreateSecurityGroup`, `ec2:DeleteSecurityGroup`, `ec2:DescribeSecurityGroups`
+- `ec2:AuthorizeSecurityGroupIngress`, `ec2:RevokeSecurityGroupIngress`
 
-### S3
-- `s3:CreateBucket` (first run only)
-- `s3:PutObject`
-- `s3:DeleteObject`
-- `s3:ListBucket`
-- `s3:Sync`
+### Container Registry (ECR)
+- `ecr:CreateRepository`, `ecr:DescribeRepositories`, `ecr:DeleteRepository`
+- `ecr:GetAuthorizationToken`, `ecr:PutImage`, `ecr:BatchGetImage`
+- `ecr:PutLifecyclePolicy`, `ecr:GetLifecyclePolicy`
 
-### CloudFront
-- `cloudfront:CreateInvalidation`
-- `cloudfront:GetDistribution`
+### Container Orchestration (ECS)
+- `ecs:CreateCluster`, `ecs:DeleteCluster`, `ecs:DescribeClusters`
+- `ecs:CreateService`, `ecs:DeleteService`, `ecs:DescribeServices`, `ecs:UpdateService`
+- `ecs:CreateTaskDefinition`, `ecs:DeleteTaskDefinition`, `ecs:DescribeTaskDefinition`
+- `ecs:RegisterTaskDefinition`, `ecs:DeregisterTaskDefinition`
+
+### Database (DynamoDB)
+- `dynamodb:CreateTable`, `dynamodb:DeleteTable`, `dynamodb:DescribeTable`
+- `dynamodb:UpdateTable`, `dynamodb:ListTables`
+- `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:Query`
+
+### Messaging (SQS)
+- `sqs:CreateQueue`, `sqs:DeleteQueue`, `sqs:GetQueueUrl`
+- `sqs:GetQueueAttributes`, `sqs:SetQueueAttributes`, `sqs:ListQueues`
+- `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`
+
+### Storage (S3)
+- `s3:CreateBucket`, `s3:DeleteBucket`, `s3:GetBucketLocation`
+- `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`
+- `s3:GetBucketPolicy`, `s3:PutBucketPolicy`, `s3:DeleteBucketPolicy`
+
+### API Management (API Gateway)
+- `apigateway:CreateRestApi`, `apigateway:DeleteRestApi`, `apigateway:GetRestApi`
+- `apigateway:CreateResource`, `apigateway:DeleteResource`, `apigateway:GetResource`
+- `apigateway:CreateMethod`, `apigateway:DeleteMethod`, `apigateway:GetMethod`
+- `apigateway:CreateIntegration`, `apigateway:DeleteIntegration`, `apigateway:GetIntegration`
+- `apigateway:CreateDeployment`, `apigateway:DeleteDeployment`, `apigateway:GetDeployment`
+- `apigateway:CreateUsagePlan`, `apigateway:DeleteUsagePlan`, `apigateway:GetUsagePlan`
+- `apigateway:CreateApiKey`, `apigateway:DeleteApiKey`, `apigateway:GetApiKey`
+
+### CDN (CloudFront)
+- `cloudfront:CreateDistribution`, `cloudfront:DeleteDistribution`, `cloudfront:GetDistribution`
+- `cloudfront:UpdateDistribution`, `cloudfront:ListDistributions`
+- `cloudfront:CreateInvalidation`, `cloudfront:GetInvalidation`, `cloudfront:ListInvalidations`
+- `cloudfront:CreateCloudFrontOriginAccessIdentity`, `cloudfront:DeleteCloudFrontOriginAccessIdentity`
+- `cloudfront:GetCloudFrontOriginAccessIdentity`, `cloudfront:UpdateCloudFrontOriginAccessIdentity`
+
+### Identity & Access (IAM)
+- `iam:CreateRole`, `iam:DeleteRole`, `iam:GetRole`, `iam:PassRole`
+- `iam:AttachRolePolicy`, `iam:DetachRolePolicy`
+- `iam:CreatePolicy`, `iam:DeletePolicy`, `iam:GetPolicy`
+
+### Monitoring (CloudWatch)
+- `logs:CreateLogGroup`, `logs:DeleteLogGroup`, `logs:DescribeLogGroups`
+- `logs:CreateLogStream`, `logs:DeleteLogStream`, `logs:DescribeLogStreams`
+- `logs:PutLogEvents`, `logs:GetLogEvents`, `logs:FilterLogEvents`
+- `cloudwatch:PutMetricData`, `cloudwatch:GetMetricData`, `cloudwatch:GetMetricStatistics`
+
+### Secrets Management
+- `secretsmanager:CreateSecret`, `secretsmanager:DeleteSecret`, `secretsmanager:GetSecretValue`
+- `secretsmanager:DescribeSecret`, `secretsmanager:ListSecrets`
+
+### Load Balancing (ELB)
+- `elasticloadbalancing:CreateLoadBalancer`, `elasticloadbalancing:DeleteLoadBalancer`
+- `elasticloadbalancing:DescribeLoadBalancers`
+- `elasticloadbalancing:CreateTargetGroup`, `elasticloadbalancing:DeleteTargetGroup`
+- `elasticloadbalancing:DescribeTargetGroups`
+- `elasticloadbalancing:CreateListener`, `elasticloadbalancing:DeleteListener`
+- `elasticloadbalancing:DescribeListeners`
+
+**Note:** For the complete JSON policy with resource restrictions, see the README.md file.
 
 ---
 
