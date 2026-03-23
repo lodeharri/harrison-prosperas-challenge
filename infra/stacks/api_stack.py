@@ -513,7 +513,7 @@ class APIStack(Stack):
     @property
     def api_url(self) -> str:
         """Get the API Gateway URL."""
-        return self.api.url
+        return self.api.url.rstrip("/")
 
     @property
     def api_gateway_id(self) -> str:

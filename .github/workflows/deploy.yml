@@ -145,9 +145,12 @@ jobs:
             --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
             --query 'Stacks[0].Outputs[?OutputKey==`WssUrl`].OutputValue' \
             --output text 2>/dev/null || echo "")
+
+          BASE_URL_API=$(echo "$API_URL" | sed 's|/jobs.*||')
+          BASE_URL_WSS=$(echo "$WSS_URL" | sed 's|/ws/jobs.*||')
           
-          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
-          echo "wss-url=$WSS_URL" >> $GITHUB_OUTPUT
+          echo "api-url=$BASE_URL_API" >> $GITHUB_OUTPUT
+          echo "wss-url=$BASE_URL_WSS" >> $GITHUB_OUTPUT
           
           if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then
             echo "❌ ERROR: Could not get API URL from CloudFormation"
@@ -159,8 +162,8 @@ jobs:
             exit 1
           fi
           
-          echo "✅ Got API URL: $API_URL"
-          echo "✅ Got WebSocket Secure URL: $WSS_URL"
+          echo "✅ Got API URL: $BASE_URL_API"
+          echo "✅ Got WebSocket Secure URL: $BASE_URL_WSS"
 
       - name: Build frontend with API URLs
         env:
