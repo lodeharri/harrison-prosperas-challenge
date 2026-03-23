@@ -29,7 +29,7 @@ CloudFront/S3 (Frontend SPA)
 |------------|----------------|
 | Frontend | `https://<cloudfront>.cloudfront.net` |
 | REST API | `https://<api-gw>.amazonaws.com/prod/jobs` |
-| WebSocket | `ws://<ALB-DNS>:8000/ws/jobs` |
+| WebSocket | `wss://<cloudfront>.cloudfront.net/ws/jobs` |
 
 ---
 
@@ -68,7 +68,7 @@ CloudFront/S3 (Frontend SPA)
 
 ### Connection
 ```
-Frontend → ws://<ALB>:8000/ws/jobs?user_id={id}&token={jwt}
+Frontend → wss://<cloudfront>.cloudfront.net/ws/jobs?user_id={id}&token={jwt}
 ```
 
 ### Notification Flow

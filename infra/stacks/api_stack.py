@@ -506,7 +506,7 @@ class APIStack(Stack):
         CfnOutput(
             self,
             "APIUrl",
-            value=f"{self.api.url}jobs",
+            value=self.api.url.rstrip("/"),  # Remove trailing slash if present
             export_name="HarrisonAPIUrl",
         ).override_logical_id("APIUrl")
 

@@ -238,7 +238,7 @@ class CDNStack(Stack):
 
         # Create cache behaviors list
         cache_behaviors = []
-        
+
         # Add WebSocket behavior if ALB origin exists
         if alb_domain:
             cache_behaviors.append(
@@ -246,7 +246,15 @@ class CDNStack(Stack):
                     path_pattern="/ws/*",
                     target_origin_id="alb",
                     viewer_protocol_policy="https-only",
-                    allowed_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "OPTIONS", "DELETE"],
+                    allowed_methods=[
+                        "GET",
+                        "HEAD",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "OPTIONS",
+                        "DELETE",
+                    ],
                     cached_methods=["GET", "HEAD"],
                     cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",  # CachingDisabled
                     origin_request_policy_id="216adef6-5c7f-47e4-b989-5492eafa07d3",  # AllViewer
@@ -412,7 +420,7 @@ function handler(event) {
         """Create CloudFormation outputs."""
         # Get CloudFront domain name
         cf_domain = self.distribution.attr_domain_name
-        
+
         # Frontend URL (HTTPS)
         CfnOutput(
             self,
@@ -427,13 +435,13 @@ function handler(event) {
             value=f"https://{cf_domain}",
             export_name="HarrisonFrontendUrl",
         ).override_logical_id("FrontendUrl")
-        
-        # WebSocket Secure URL (WSS)
+
+        # WebSocket Secure URL (WSS) - Base URL without path
         CfnOutput(
             self,
             "WssUrl",
-            value=f"wss://{cf_domain}/ws/jobs",
-            description="WebSocket Secure URL for frontend (WSS)",
+            value=f"wss://{cf_domain}",
+            description="WebSocket Secure URL for frontend (WSS) - Base URL",
             export_name="HarrisonWssUrl",
         ).override_logical_id("WssUrl")
 
@@ -441,11 +449,11 @@ function handler(event) {
     def distribution_url(self) -> str:
         """Get the CloudFront distribution URL."""
         return f"https://{self.distribution.attr_domain_name}"
-    
+
     @property
     def wss_url(self) -> str:
         """Get the WebSocket Secure URL."""
-        return f"wss://{self.distribution.attr_domain_name}/ws/jobs"
+        return f"wss://{self.distribution.attr_domain_name}"
 
     @property
     def bucket_name(self) -> str:
