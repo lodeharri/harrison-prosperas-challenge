@@ -36,11 +36,14 @@ export function Dashboard({ onLogout }: DashboardProps) {
   const {
     jobs,
     total,
+    page,
+    pageSize,
     isLoading,
     error,
     createJob,
     updateJobLocally,
     fetchJobs,
+    setPage,
   } = useJobs();
 
   const handleWsMessage = useCallback((message: WebSocketMessage) => {
@@ -104,13 +107,11 @@ export function Dashboard({ onLogout }: DashboardProps) {
             isLoading={isLoading}
             error={error}
             onRefresh={fetchJobs}
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
           />
-          
-          {total > 0 && (
-            <p className="text-sm text-gray-500 text-center mt-4">
-              Mostrando {jobs.length} de {total} reportes
-            </p>
-          )}
         </div>
       </div>
 

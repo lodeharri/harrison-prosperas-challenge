@@ -383,16 +383,29 @@ jobs:
           echo "### 🌐 Frontend URL (CloudFront)"
           echo ""
           
-          CLOUDFRONT_ID="${{ steps.get-cloudfront.outputs.distribution-id || '' }}"
-          if [ -n "$CLOUDFRONT_ID" ]; then
-            FRONTEND_DOMAIN=$(aws cloudfront get-distribution --id "$CLOUDFRONT_ID" --query 'Distribution.DomainName' --output text 2>/dev/null || echo "")
-            if [ -n "$FRONTEND_DOMAIN" ]; then
-              FRONTEND_URL="https://$FRONTEND_DOMAIN"
-              echo "- **URL**: \`$FRONTEND_URL\`"
-              echo "- **Direct link**: $FRONTEND_URL"
-              echo ""
-              echo "**Quick test**: Open the link above in your browser to verify the frontend is working."
+          # First try to get frontend URL from CloudFormation outputs
+          FRONTEND_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`DistributionDomainName`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          # If CloudFormation output fails, fall back to CloudFront API
+          if [ -z "$FRONTEND_DOMAIN" ] || [ "$FRONTEND_DOMAIN" = "None" ]; then
+            CLOUDFRONT_ID="${{ steps.get-cloudfront.outputs.distribution-id || '' }}"
+            if [ -n "$CLOUDFRONT_ID" ]; then
+              FRONTEND_DOMAIN=$(aws cloudfront get-distribution --id "$CLOUDFRONT_ID" --query 'Distribution.DomainName' --output text 2>/dev/null || echo "")
             fi
+          fi
+          
+          if [ -n "$FRONTEND_DOMAIN" ] && [ "$FRONTEND_DOMAIN" != "None" ]; then
+            FRONTEND_URL="https://$FRONTEND_DOMAIN"
+            echo "- **URL**: \`$FRONTEND_URL\`"
+            echo "- **Direct link**: $FRONTEND_URL"
+            echo ""
+            echo "**Quick test**: Open the link above in your browser to verify the frontend is working."
+          else
+            echo "- **Status**: Could not retrieve frontend URL"
+            echo "- **Troubleshooting**: Check CloudFront distribution status in AWS Console"
           fi
           
           echo ""
@@ -461,27 +474,6 @@ jobs:
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "**Quick test**: Open the link above in your browser to verify the frontend is working." >> $GITHUB_STEP_SUMMARY
             fi
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔗 API Endpoints" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          API_URL="${{ steps.api-endpoint.outputs.api-url }}"
-          if [ -n "$API_URL" ] && [ "$API_URL" != "null" ]; then
-            BASE_URL=$(echo "$API_URL" | sed 's|/jobs.*||')
-            echo "- **REST API**: \`$BASE_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Jobs Endpoint**: \`$API_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Health Check**: \`$BASE_URL/health\`" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          WSS_URL=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
-            --query 'Stacks[0].Outputs[?OutputKey==`WssUrl`].OutputValue' \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -n "$WSS_URL" ] && [ "$WSS_URL" != "None" ]; then
-            echo "- **WebSocket**: \`$WSS_URL\`" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
