@@ -183,20 +183,6 @@ The AWS credentials need the following permissions:
 
 ---
 
-## Cost Optimization (< $10 USD/month)
-
-| Service | Configuration | Estimated Cost |
-|---------|---------------|----------------|
-| ECS Fargate | 0.5 vCPU, 1 GB, Auto-scaling | ~$5-7/month |
-| DynamoDB | On-demand | ~$0-1/month |
-| SQS | Standard queue | ~$0/month* |
-| ECR | Storage only | ~$0.05/month |
-| CloudFront | Pay-as-you-go | ~$0.02/month |
-| S3 | Standard | ~$0.01/month |
-| **Total** | | **~$5-8/month** |
-
-*SQS: First 1M requests/month free
-
 ---
 
 ## CDK Outputs
@@ -307,4 +293,4 @@ act -W .github/workflows/deploy.yml
 - [x] **Secrets documentation:** AWS credentials, JWT key
 - [x] **Variables documentation:** CloudFront ID
 - [x] **IAM permissions:** Complete permission set
-- [x] **Cost estimation:** <$10/month
+

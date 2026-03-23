@@ -213,7 +213,7 @@ infra/
 | Resource | Name | Type | Config |
 |----------|------|------|--------|
 | S3 Bucket | `harrison-frontend` | Static hosting | OAI protected |
-| CloudFront | `harrison-frontend-cdn` | Distribution | Price Class 100 |
+| CloudFront | `harrison-frontend-cdn` | Distribution | Global distribution |
 | OAI | Origin Access Identity | Security | S3 protection |
 | Function | `spa-routing` | CloudFront | SPA routing |
 
@@ -438,19 +438,6 @@ aws cloudfront list-distributions
 ```
 
 ---
-
-## Cost Estimate
-
-| Service | Monthly Cost |
-|---------|--------------|
-| ECS Fargate (API) | ~$5-10 |
-| ECS Fargate (Worker) | ~$5-10 |
-| DynamoDB | ~$0 (free tier) |
-| SQS | ~$0 (free tier) |
-| API Gateway | ~$0-5 |
-| CloudFront | ~$0-5 |
-| S3 | ~$0-1 |
-| **Total** | **<$25/month** |
 
 ---
 

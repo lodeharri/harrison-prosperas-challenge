@@ -15,13 +15,16 @@
 CloudFront/S3 (Frontend SPA)
     │
     ├──► REST API ──► API Gateway ──► ALB ──► ECS Fargate (FastAPI)
+    │      │ Rate Limit: 100 req/sec
+    │      │ Burst: 200
+    │      │ Monthly: 10k req
     │
-    └──► WebSocket ──► ALB ──► ECS Fargate (FastAPI WebSocket Manager)
-                                       ▲
-                                       │
-                                  Worker (ECS Fargate)
-                                       │
-                              SQS ──► DynamoDB
+    └──► WebSocket ──► CloudFront ──► ALB ──► ECS Fargate (FastAPI WebSocket Manager)
+                                                       ▲
+                                                       │
+                                                  Worker (ECS Fargate)
+                                                       │
+                                               SQS ──► DynamoDB
 ```
 
 ### Key URLs
@@ -30,6 +33,14 @@ CloudFront/S3 (Frontend SPA)
 | Frontend | `https://<cloudfront>.cloudfront.net` |
 | REST API | `https://<api-gw>.amazonaws.com/prod/jobs` |
 | WebSocket | `wss://<cloudfront>.cloudfront.net/ws/jobs` |
+
+### Rate Limiting Configuration
+| Setting | Value | Description |
+|---------|-------|-------------|
+| **Rate Limit** | 100 req/sec | Requests per second |
+| **Burst Limit** | 200 | Burst capacity |
+| **Monthly Quota** | 10,000 req/month | Monthly request limit |
+| **API Key** | `harrison-api-key` | Required for all REST endpoints (except `/health`) |
 
 ---
 
@@ -104,7 +115,7 @@ environment={
 | Variable | Source | Description |
 |----------|--------|-------------|
 | `VITE_API_URL` | GitHub Workflow (API Gateway) | REST API URL |
-| `VITE_WS_URL` | GitHub Workflow (ALB URL) | WebSocket URL |
+| `VITE_WS_URL` | GitHub Workflow (CloudFront URL) | WebSocket URL |
 
 ---
 
@@ -114,8 +125,8 @@ environment={
 |-------|-----------|
 | `harrison-data-stack` | DynamoDB tables, SQS queues, VPC, ECS Cluster |
 | `harrison-compute-stack` | ECR, ECS Fargate (API + Worker), ALB |
-| `harrison-api-stack` | API Gateway REST, Rate Limiting |
-| `harrison-cdn-stack` | S3, CloudFront, OAI |
+| `harrison-api-stack` | API Gateway REST, Rate Limiting (100 req/sec, burst 200) |
+| `harrison-cdn-stack` | S3, CloudFront, OAI, WebSocket routing |
 
 ---
 
