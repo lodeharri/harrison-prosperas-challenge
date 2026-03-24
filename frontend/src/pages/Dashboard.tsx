@@ -18,6 +18,21 @@ interface ToastItem {
   type: 'success' | 'error' | 'info' | 'warning';
 }
 
+// localStorage helper functions for idempotency key management
+const STORAGE_KEY_PREFIX = 'job_idempotency_pending';
+
+function getPendingIdempotencyKey(): string | null {
+  return localStorage.getItem(STORAGE_KEY_PREFIX);
+}
+
+function setPendingIdempotencyKey(key: string): void {
+  localStorage.setItem(STORAGE_KEY_PREFIX, key);
+}
+
+function clearPendingIdempotencyKey(): void {
+  localStorage.removeItem(STORAGE_KEY_PREFIX);
+}
+
 export function Dashboard({ onLogout }: DashboardProps) {
   // Get userId from JWT token
   const userId = apiService.getUserId() || 'unknown';
@@ -85,13 +100,30 @@ export function Dashboard({ onLogout }: DashboardProps) {
       date_range: data.date_range,
       format: data.format as 'pdf' | 'csv' | 'excel',
     };
-    const success = await createJob(jobData);
-    if (success) {
-      addToast('Reporte solicitado exitosamente', 'success');
+    
+    // Check for pending idempotency key or generate new one
+    let idempotencyKey = getPendingIdempotencyKey();
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+    }
+    
+    const result = await createJob(jobData, idempotencyKey);
+    
+    if (result.success) {
+      // Clear pending key after successful creation
+      clearPendingIdempotencyKey();
+      
+      if (result.idempotent) {
+        addToast('Reporte recuperado exitosamente (petición idempotente)', 'info');
+      } else {
+        addToast('Reporte solicitado exitosamente', 'success');
+      }
     } else {
+      // Keep the key in storage for retry
+      setPendingIdempotencyKey(idempotencyKey);
       addToast('Error al solicitar reporte', 'error');
     }
-    return success;
+    return result.success;
   };
 
   return (

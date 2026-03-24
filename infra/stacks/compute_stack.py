@@ -21,7 +21,9 @@ from aws_cdk import (
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_cloudwatch as cloudwatch,
 )
+from aws_cdk import aws_applicationautoscaling as autoscaling
 from constructs import Construct
 
 from .data_stack import DataStack
@@ -83,6 +85,11 @@ class ComputeStack(Stack):
         # ===================================================================
         self.api_service = self._create_api_service()
         self.worker_service = self._create_worker_service()
+
+        # ===================================================================
+        # Auto Scaling Configuration
+        # ===================================================================
+        self._configure_api_autoscaling(self.api_service)
 
         # ===================================================================
         # Outputs
@@ -449,6 +456,60 @@ class ComputeStack(Stack):
         # Return the load balanced service wrapper (contains the FargateService)
         return load_balanced_service
 
+    def _configure_api_autoscaling(
+        self, service: ecs_patterns.ApplicationLoadBalancedFargateService
+    ) -> None:
+        """
+        Configure auto scaling for API service based on CPU and request count.
+
+        Scaling policy:
+            - Scale out when CPU utilization > 70%
+            - Scale out when request count > 1000 per target
+            - Scale in when metrics return to normal
+            - Min capacity: 1, Max capacity: 10
+        """
+        # Get the scalable target for the ECS service
+        scalable_target = service.service.auto_scale_task_count(
+            min_capacity=1,
+            max_capacity=10,
+        )
+
+        # Scale based on CPU utilization (70% threshold)
+        scalable_target.scale_on_cpu_utilization(
+            "APICpuScaling",
+            target_utilization_percent=70,
+            scale_in_cooldown=cdk.Duration.seconds(60),
+            scale_out_cooldown=cdk.Duration.seconds(60),
+        )
+
+        # Scale based on request count per target (1000 requests/target)
+        scalable_target.scale_on_metric(
+            "APIRequestCountScaling",
+            metric=cloudwatch.Metric(
+                metric_name="RequestCountPerTarget",
+                namespace="AWS/ApplicationELB",
+                dimensions_map={
+                    "LoadBalancer": service.load_balancer.load_balancer_full_name,
+                    "TargetGroup": service.target_group.target_group_full_name,
+                },
+                period=cdk.Duration.minutes(1),
+                statistic="Average",
+            ),
+            scaling_steps=[
+                {"lower": 0, "upper": 1000, "change": 1},
+                {"lower": 1000, "upper": 2000, "change": 2},
+                {"lower": 2000, "upper": 3000, "change": 3},
+                {"lower": 3000, "upper": 4000, "change": 4},
+                {"lower": 4000, "upper": 5000, "change": 5},
+                {"lower": 5000, "upper": 6000, "change": 6},
+                {"lower": 6000, "upper": 7000, "change": 7},
+                {"lower": 7000, "upper": 8000, "change": 8},
+                {"lower": 8000, "upper": 9000, "change": 9},
+                {"lower": 9000, "change": 10},
+            ],
+            adjustment_type=autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+        )
+
     def _create_worker_service(self) -> ecs.FargateService:
         """
         Create ECS Fargate service for Worker (SQS consumer with WebSocket).
@@ -522,7 +583,62 @@ class ComputeStack(Stack):
             export_name="HarrisonWorkerServiceName",
         ).override_logical_id("WorkerServiceName")
 
+        # Configure autoscaling for worker service
+        self._configure_worker_autoscaling(service)
+
         return service
+
+    def _configure_worker_autoscaling(self, service: ecs.FargateService) -> None:
+        """
+        Configure auto scaling for worker service based on SQS queue depth and CPU.
+
+        Scaling policy:
+            - Scale out when SQS queue has > 10 messages visible per task
+            - Scale out when CPU utilization > 70%
+            - Scale in when metrics return to normal
+            - Min capacity: 1, Max capacity: 10
+        """
+        # Get the scalable target for the ECS service
+        scalable_target = service.auto_scale_task_count(
+            min_capacity=1,
+            max_capacity=10,
+        )
+
+        # Scale based on CPU utilization (70% threshold)
+        scalable_target.scale_on_cpu_utilization(
+            "WorkerCpuScaling",
+            target_utilization_percent=70,
+            scale_in_cooldown=cdk.Duration.seconds(60),
+            scale_out_cooldown=cdk.Duration.seconds(60),
+        )
+
+        # Scale based on SQS queue depth (messages per task)
+        # Target: 10 messages per task
+        scalable_target.scale_on_metric(
+            "WorkerSQSMessagesScaling",
+            metric=cloudwatch.Metric(
+                metric_name="ApproximateNumberOfMessagesVisible",
+                namespace="AWS/SQS",
+                dimensions_map={
+                    "QueueName": self.data_stack.job_queue_name,
+                },
+                period=cdk.Duration.minutes(1),
+                statistic="Maximum",
+            ),
+            scaling_steps=[
+                {"lower": 0, "upper": 10, "change": 1},
+                {"lower": 10, "upper": 20, "change": 2},
+                {"lower": 20, "upper": 30, "change": 3},
+                {"lower": 30, "upper": 40, "change": 4},
+                {"lower": 40, "upper": 50, "change": 5},
+                {"lower": 50, "upper": 60, "change": 6},
+                {"lower": 60, "upper": 70, "change": 7},
+                {"lower": 70, "upper": 80, "change": 8},
+                {"lower": 80, "upper": 90, "change": 9},
+                {"lower": 90, "change": 10},
+            ],
+            adjustment_type=autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+        )
 
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs."""

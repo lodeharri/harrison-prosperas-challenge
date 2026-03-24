@@ -25,16 +25,16 @@ export function useJobs() {
     }
   }, [page, pageSize]);
 
-  const createJob = useCallback(async (data: JobCreateRequest): Promise<boolean> => {
+  const createJob = useCallback(async (data: JobCreateRequest, idempotencyKey?: string): Promise<{ success: boolean; idempotent: boolean }> => {
     setError(null);
     try {
-      await apiService.createJob(data);
+      const response = await apiService.createJob(data, idempotencyKey);
       await fetchJobs();
-      return true;
+      return { success: true, idempotent: response.idempotent || false };
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
       setError(axiosError.response?.data?.error?.message || 'Failed to create job');
-      return false;
+      return { success: false, idempotent: false };
     }
   }, [fetchJobs]);
 

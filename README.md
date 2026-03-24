@@ -1,5 +1,7 @@
 # Reto Prosperas - Report Job Processing System
 
+![GitHub Actions Status](https://github.com/lodeharri/harrison-prosperas-challenge/actions/workflows/deploy.yml/badge.svg)
+
 Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB y workers asíncronos con notificaciones en tiempo real via WebSocket.
 
 ---
@@ -94,10 +96,7 @@ Sistema de procesamiento asíncrono de trabajos con FastAPI, AWS SQS, DynamoDB y
 
 | Servicio | URL | Propósito |
 |----------|-----|-----------|
-| Frontend (Pruebas) | `https://d1n3v8uwwdhhlr.cloudfront.net/` | SPA React - Entorno de pruebas |
-| Frontend (Producción) | `https://<cloudfront>.cloudfront.net` | SPA React - Producción |
-| REST API | `https://<api-gw>.amazonaws.com/prod` | Endpoints REST |
-| WebSocket | `wss://<cloudfront>.cloudfront.net/ws/jobs` | Notificaciones en tiempo real |
+| Frontend (Producción) | `https://d1n3v8uwwdhhlr.cloudfront.net` | SPA React - Entorno de producción |
 
 ---
 

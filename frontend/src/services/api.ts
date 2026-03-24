@@ -11,6 +11,13 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
 
 /**
+ * Generate a unique idempotency key using browser crypto API.
+ */
+export function generateIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
+
+/**
  * Decode JWT payload to extract user information.
  * Returns null if token is invalid.
  */
@@ -75,8 +82,9 @@ class ApiService {
     return response.data;
   }
 
-  async createJob(data: JobCreateRequest): Promise<JobCreateResponse> {
-    const response = await this.client.post<JobCreateResponse>('/jobs', data);
+  async createJob(data: JobCreateRequest, idempotencyKey?: string): Promise<JobCreateResponse> {
+    const config = idempotencyKey ? { headers: { 'X-Idempotency-Key': idempotencyKey } } : {};
+    const response = await this.client.post<JobCreateResponse>('/jobs', data, config);
     return response.data;
   }
 

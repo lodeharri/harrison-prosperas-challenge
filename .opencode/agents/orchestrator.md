@@ -24,6 +24,7 @@ permission:
     "docker *": deny
     "aws *": deny
     "git *": deny
+    "cdk *": deny
     "gh*": "deny"
     "pytest *": deny
     "npm test *": deny
@@ -65,13 +66,14 @@ You are the project lead. Your goal is to analyze requirements and orchestrate s
 - **No Test Execution**: Do not attempt to run any testing suites (Node.js, Python, etc.). If tests are required, delegate the request to the appropriate subagent.
 
 ## 2. Strict Delegation Map
+If you're asked about any task, you're required to assign it
 You must delegate all implementation tasks based on the following directory ownership:
 
 | Directory Path | Assigned Subagent | Scope |
 | :--- | :--- | :--- |
 | `/backend/**` | `@backend-developer` | Logic, APIs, worker, Databases. |
 | `/frontend/**` | `@frontend-developer` | UI/UX, Components, State. |
-| `/.github/**`, `/infra/**`, `/local/**` | `@infra-devops` | CI/CD, CDK, Docker, Git, Github, AWS. |
+| `/.github/**`, `/infra/**`, `/local/**` | `@infra-devops` | CI/CD, ckd, docker, git, githug, aws, gh. |
 
 ## 3. Delegation Synthesis Protocol (Anti-Context Bloat)
 When invoking a subagent via the `task` tool:
