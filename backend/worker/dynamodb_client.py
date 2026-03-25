@@ -1,5 +1,6 @@
 """DynamoDB client for job status operations."""
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -202,6 +203,79 @@ class DynamoDBClient:
             return True
         except ClientError:
             return False
+
+    async def check_message_id_exists(self, message_id: str) -> bool:
+        """
+        Check if a message ID has already been processed.
+
+        Args:
+            message_id: The SQS message ID to check
+
+        Returns:
+            True if the message ID exists in the idempotency table
+        """
+        session = await self._get_session()
+
+        try:
+            async with await self._create_client_with_retry(
+                "dynamodb",
+                endpoint_url=self.settings.aws_endpoint_url,
+                region_name=self.settings.aws_region,
+                aws_access_key_id=self.settings.aws_access_key_id,
+                aws_secret_access_key=self.settings.aws_secret_access_key,
+            ) as client:
+                response = await client.get_item(
+                    TableName=self.settings.dynamodb_table_idempotency,
+                    Key={"idempotency_key": {"S": message_id}},
+                )
+                return "Item" in response
+        except ClientError as e:
+            logger.error(f"Failed to check message ID {message_id}: {e}")
+            raise
+
+    async def save_message_id(self, message_id: str, job_id: str) -> bool:
+        """
+        Save a message ID to the idempotency table with 24-hour TTL.
+
+        Args:
+            message_id: The SQS message ID to save
+            job_id: The job ID associated with this message
+
+        Returns:
+            True if saved successfully, False if key already exists
+        """
+        session = await self._get_session()
+        # TTL: 24 hours from now (86400 seconds)
+        ttl = int(time.time()) + 86400
+
+        try:
+            async with await self._create_client_with_retry(
+                "dynamodb",
+                endpoint_url=self.settings.aws_endpoint_url,
+                region_name=self.settings.aws_region,
+                aws_access_key_id=self.settings.aws_access_key_id,
+                aws_secret_access_key=self.settings.aws_secret_access_key,
+            ) as client:
+                await client.put_item(
+                    TableName=self.settings.dynamodb_table_idempotency,
+                    Item={
+                        "idempotency_key": {"S": message_id},
+                        "job_id": {"S": job_id},
+                        "expires_at": {"N": str(ttl)},
+                    },
+                    ConditionExpression="attribute_not_exists(idempotency_key)",
+                )
+                return True
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code == "ConditionalCheckFailedException":
+                # Key already exists - treat as duplicate
+                logger.info(
+                    f"Message ID {message_id} already exists (concurrent insert)"
+                )
+                return False
+            logger.error(f"Failed to save message ID {message_id}: {e}")
+            raise
 
     def _unmarshall_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """

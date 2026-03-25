@@ -264,6 +264,9 @@ class TestProcessorConcurrency:
         """Test that processor can handle multiple jobs."""
         mock_sqs = AsyncMock()
         mock_dynamodb = AsyncMock()
+        # Idempotency methods - return False (message not processed yet)
+        mock_dynamodb.check_message_id_exists = AsyncMock(return_value=False)
+        mock_dynamodb.save_message_id = AsyncMock(return_value=True)
 
         # Return 5 messages
         mock_sqs.receive_messages = AsyncMock(

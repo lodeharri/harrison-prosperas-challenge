@@ -142,6 +142,20 @@ infra/
 | ECS Fargate | `harrison-api` | ALB Service | 0.5 vCPU, 1 GB, port 8000 |
 | ECS Fargate | `harrison-worker` | Service | 0.25 vCPU, 0.5 GB |
 
+#### Worker Auto Scaling
+
+The Worker service implements **target tracking** auto scaling based on SQS queue depth:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| **Scaling Type** | Target Tracking | Maintains a target value for the metric |
+| **Metric** | SQS `ApproximateNumberOfMessagesVisible` | Queue depth |
+| **Min Tasks** | 1 | Minimum worker instances |
+| **Max Tasks** | 8 | Maximum worker instances |
+| **Target Value** | 25 messages/task | Desired messages per worker task |
+
+This configuration ensures that as message volume increases, additional worker tasks are automatically spawned to handle the load, maintaining consistent processing throughput.
+
 ### 3. API Stack (`harrison-api-stack`)
 
 | Resource | Name | Type | Config |

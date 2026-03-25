@@ -21,6 +21,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_secretsmanager as secretsmanager,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_applicationautoscaling as appscaling,
+    aws_cloudwatch as cloudwatch,
 )
 from constructs import Construct
 
@@ -335,6 +337,23 @@ class ComputeStack(Stack):
             )
         )
 
+        # Application Auto Scaling permissions
+        role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "application-autoscaling:RegisterScalableTarget",
+                    "application-autoscaling:DescribeScalableTargets",
+                    "application-autoscaling:PutScalingPolicy",
+                    "application-autoscaling:DescribeScalingPolicies",
+                    "cloudwatch:PutMetricAlarm",
+                    "cloudwatch:DeleteAlarms",
+                    "cloudwatch:DescribeAlarms",
+                ],
+                resources=["*"],
+            )
+        )
+
         return role
 
     def _create_api_service(self) -> ecs_patterns.ApplicationLoadBalancedFargateService:
@@ -515,6 +534,11 @@ class ComputeStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
 
+        # ===================================================================
+        # Application Auto Scaling for Worker
+        # ===================================================================
+        self._create_worker_autoscaling(service)
+
         CfnOutput(
             self,
             "WorkerServiceName",
@@ -564,3 +588,58 @@ class ComputeStack(Stack):
         """Get the API service URL (ALB DNS name)."""
         # Get from the load balancer output
         return self.api_service.load_balancer.load_balancer_dns_name
+
+    def _create_worker_autoscaling(self, service: ecs.FargateService) -> None:
+        """
+        Configure Application Auto Scaling for Worker service based on SQS queue depth.
+
+        Configuration:
+            - Min Capacity: 1
+            - Max Capacity: 8
+            - Target: 75 messages per task (ApproximateNumberOfMessagesVisible / RunningTasks)
+            - Scale-out cooldown: 60 seconds
+            - Scale-in cooldown: 300 seconds
+
+        Uses a target tracking scaling policy that scales based on the SQS queue
+        message count divided by the number of running tasks.
+        """
+        # Create IAM role for autoscaling
+        auto_scaling_role = iam.Role(
+            self,
+            "WorkerAutoScalingRole",
+            assumed_by=iam.ServicePrincipal("application-autoscaling.amazonaws.com"),
+            description="Role for ECS Service Auto Scaling",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonECS_FullAccess"),
+            ],
+        )
+
+        # Create Scalable Target for ECS Service
+        scalable_target = appscaling.ScalableTarget(
+            self,
+            "WorkerScalableTarget",
+            service_namespace=appscaling.ServiceNamespace.ECS,
+            scalable_dimension="ecs:service:DesiredCount",
+            max_capacity=8,
+            min_capacity=1,
+            resource_id=f"service/{self.data_stack.ecs_cluster.cluster_name}/{service.service_name}",
+            role=auto_scaling_role,
+        )
+
+        # Create target tracking scaling policy based on SQS queue depth
+        # Target: 25 messages per task for optimal processing throughput
+        scalable_target.scale_to_track_metric(
+            "WorkerTargetTrackingPolicy",
+            target_value=25.0,
+            custom_metric=cloudwatch.Metric(
+                namespace="AWS/SQS",
+                metric_name="ApproximateNumberOfMessagesVisible",
+                dimensions_map={
+                    "QueueName": self.data_stack.job_queue_name,
+                },
+                statistic="Average",
+                period=Duration.minutes(1),
+            ),
+            # Disable scale-in to use step scaling for more control
+            disable_scale_in=False,
+        )
