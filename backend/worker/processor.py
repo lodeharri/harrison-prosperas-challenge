@@ -147,12 +147,70 @@ class JobProcessor:
             True if job was processed successfully
         """
         receipt_handle = message.get("ReceiptHandle", "")
+        message_id = message.get("MessageId", "")
         job_message: JobMessage | None = None
 
         try:
+            # Idempotency check: verify message hasn't been processed before
+            if message_id:
+                if await self.dynamodb.check_message_id_exists(message_id):
+                    logger.info(
+                        "duplicate_message_detected",
+                        message_id=message_id,
+                        action="skipping_notification",
+                    )
+                    # Delete duplicate message without notifying
+                    is_high_priority = (
+                        message.get("MessageAttributes", {})
+                        .get("priority", {})
+                        .get("StringValue", "")
+                        == "high"
+                    )
+                    source_queue_url = (
+                        self.settings.sqs_priority_queue_url
+                        if is_high_priority
+                        else self.settings.sqs_queue_url
+                    )
+                    await self.sqs.delete_message(source_queue_url, receipt_handle)
+                    return True
+
+                # Save message_id for idempotency (will be used after parsing job_message)
+                # We save it after parsing to get the job_id for logging
+
             # Parse message
             job_message = JobMessage.from_sqs_message(message)
             job_id = job_message.job_id
+
+            # Save message_id to idempotency table (after getting job_id)
+            if message_id:
+                try:
+                    save_result = await self.dynamodb.save_message_id(
+                        message_id, job_id
+                    )
+                    if not save_result:
+                        # Another process already saved this message_id - treat as duplicate
+                        logger.info(
+                            "concurrent_message_detected",
+                            message_id=message_id,
+                            job_id=job_id,
+                            action="skipping",
+                        )
+                        is_high_priority = job_message.priority == JobPriority.HIGH
+                        source_queue_url = (
+                            self.settings.sqs_priority_queue_url
+                            if is_high_priority
+                            else self.settings.sqs_queue_url
+                        )
+                        await self.sqs.delete_message(source_queue_url, receipt_handle)
+                        return True
+                except Exception as e:
+                    logger.warning(
+                        "idempotency_save_failed",
+                        message_id=message_id,
+                        job_id=job_id,
+                        error=str(e),
+                    )
+                    # Continue processing if save fails - don't block job processing
 
             logger.info(
                 "job_processing_started",

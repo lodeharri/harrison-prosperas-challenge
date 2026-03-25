@@ -90,6 +90,9 @@ def mock_dynamodb_client() -> AsyncMock:
             "result_url": "https://example.com/report.pdf",
         }
     )
+    # Idempotency methods - return False (message not processed yet)
+    client.check_message_id_exists = AsyncMock(return_value=False)
+    client.save_message_id = AsyncMock(return_value=True)
     client.health_check = AsyncMock(return_value=True)
     client.close = AsyncMock()
     return client

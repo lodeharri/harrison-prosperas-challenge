@@ -1,9 +1,55 @@
 # Backend - FastAPI REST API + Worker
 
-## Overview
-FastAPI-based REST API that accepts report job requests, queues them via AWS SQS, processes them asynchronously with workers, and persists job state in AWS DynamoDB.
+**Project:** Reto Prosperas - Report Job Processing System  
+**Directory:** `backend/`
+
+## Context
+
+This is the **Backend Module** of the Reto Prosperas project. The full project context is documented in the root `AGENTS.md`.
+
+### What is Reto Prosperas?
+A system that allows users to create report jobs, processes them asynchronously via AWS SQS workers, and receives real-time notifications via WebSocket when jobs complete.
+
+### Architecture Overview
+```
+Frontend (React SPA)
+      │
+      ▼ (REST + WebSocket)
+Backend (FastAPI) ◄──────────────┐
+      │                         │
+      ▼ (SQS + DynamoDB)         │
+Worker (SQS Consumer)           │
+      │                         │
+      ▼ (POST /internal/notify)─┘
+```
+
+## Scope
+
+| Component | Responsibility |
+|-----------|----------------|
+| **API** | Accept job requests, store in DynamoDB, send to SQS |
+| **WebSocket** | Real-time notifications to connected frontend clients |
+| **/internal/notify** | Endpoint called by Worker to broadcast job status changes |
+| **NOT** | Does NOT process jobs - that's the Worker's job |
+
+## Complete Flow
+
+```
+1. User creates job (Frontend POST /jobs)
+         │
+2. API: saves to DynamoDB → sends to SQS → returns job_id
+         │
+3. Worker: receives from SQS → processes (5-30s) → updates DynamoDB
+         │
+4. Worker: POST /internal/notify {job_id, status, result_url}
+         │
+5. API: WebSocketManager broadcasts to user's connection
+         │
+6. Frontend: receives {"type":"job_update", "data":{...}} → updates UI
+```
 
 ## Tech Stack
+
 | Component | Technology |
 |-----------|------------|
 | API | FastAPI + Pydantic v2 + JWT (HS256) |
@@ -12,36 +58,15 @@ FastAPI-based REST API that accepts report job requests, queues them via AWS SQS
 | Worker | Python asyncio + aiobotocore |
 | Observability | CloudWatch Logs/Metrics (watchtower) |
 
-## Architecture: Hexagonal
+## Environment Detection
 
-```
-src/
-├── domain/              # Pure business logic (no deps)
-│   ├── entities/        # Job entity
-│   ├── value_objects/    # JobStatus enum
-│   └── exceptions/       # Domain exceptions
-├── application/         # Use cases + ports
-│   ├── ports/           # JobRepository, JobQueue interfaces
-│   └── use_cases/       # CreateJob, GetJob, ListJobs, UpdateJobStatus
-├── adapters/
-│   ├── primary/fastapi/ # REST routes, WebSocket
-│   └── secondary/       # DynamoDB, SQS implementations
-├── config/              # Pydantic settings
-└── shared/              # JWT, exceptions, observability
+The app detects environment via `AWS_ENDPOINT_URL`:
 
-worker/                  # SQS consumer (async processor)
-```
+| Environment | AWS_ENDPOINT_URL | Behavior |
+|-------------|------------------|----------|
+| LocalStack (dev) | `http://localhost:4566` | Creates resources locally |
+| Production | NOT set | Uses real AWS |
 
-## Environment Detection Logic
-
-The application automatically detects the environment based on `AWS_ENDPOINT_URL`:
-
-| Environment | `AWS_ENDPOINT_URL` | Behavior |
-|-------------|-------------------|----------|
-| LocalStack (dev) | Defined (e.g., `http://localhost:4566`) | Creates resources, uses local endpoints |
-| AWS Production | NOT defined | Uses native AWS, CDK handles provisioning |
-
-**Computed Properties:**
 ```python
 settings.is_localstack  # True if AWS_ENDPOINT_URL is set
 settings.is_production # True if AWS_ENDPOINT_URL is NOT set
@@ -59,6 +84,62 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 | WS | /ws/jobs/{user_id} | JWT | Real-time updates |
 | POST | /internal/notify | Internal | Worker notification endpoint |
 
+## Worker Integration
+
+The Worker processes jobs and notifies the API via `/internal/notify`:
+
+```python
+# Worker calls this after status change
+POST /internal/notify
+{
+    "user_id": "user-123",
+    "job_id": "job-456",
+    "status": "COMPLETED",
+    "result_url": "https://...",
+    "updated_at": "2026-03-24T10:00:00Z",
+    "report_type": "sales_report"
+}
+```
+
+**Environment Variable:** `API_BASE_URL` in Worker must point to the API (ALB in production).
+
+## Architecture: Hexagonal
+
+```
+src/
+├── domain/              # Pure business logic (no deps)
+│   ├── entities/        # Job entity
+│   ├── value_objects/   # JobStatus enum
+│   └── exceptions/     # Domain exceptions
+├── application/        # Use cases + ports
+│   ├── ports/          # JobRepository, JobQueue interfaces
+│   └── use_cases/      # CreateJob, GetJob, ListJobs
+├── adapters/
+│   ├── primary/fastapi/ # REST routes, WebSocket
+│   └── secondary/      # DynamoDB, SQS implementations
+├── config/             # Pydantic settings
+└── shared/             # JWT, exceptions, observability
+
+worker/                  # SQS consumer (async processor)
+```
+
+## If You Need To...
+
+| Task | Go To |
+|------|-------|
+| Modify REST endpoints | `src/adapters/primary/fastapi/routes/jobs.py` |
+| Modify WebSocket | `src/adapters/primary/fastapi/routes/ws_routes.py` |
+| Modify notification endpoint | `src/adapters/primary/fastapi/routes/notify.py` |
+| Change data model | `src/domain/entities/job.py` |
+| Change job status logic | `src/domain/value_objects/job_status.py` |
+| Modify DynamoDB logic | `src/adapters/secondary/dynamodb/job_repository.py` |
+| Modify SQS logic | `src/adapters/secondary/sqs/job_queue.py` |
+| Change API settings | `src/config/settings.py` |
+| Modify worker (different module) | `worker/` |
+| Modify worker settings | `worker/config.py` |
+| Modify worker processing | `worker/processor.py` |
+| Run tests | `pytest tests/ -v` or `pytest worker/tests/ -v` |
+
 ## Data Model (DynamoDB)
 
 **Table: jobs** (`harrison-jobs` in production)
@@ -75,9 +156,9 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 | created_at | String | - |
 | updated_at | String | - |
 
-**GSI:** user_id-created_at-index (for user queries)
+**GSI:** user_id-created_at-index
 
-**Table: idempotency_keys** (`harrison-idempotency` in production, TTL: 24h)
+**Table: idempotency_keys** (`harrison-idempotency`, TTL: 24h)
 | Attribute | Type | Key |
 |-----------|------|-----|
 | idempotency_key | String | PK |
@@ -98,7 +179,7 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 ### AWS Configuration
 
 | Variable | LocalStack (Dev) | Production (AWS) | Description |
-|----------|-----------------|------------------|-------------|
+|----------|------------------|------------------|-------------|
 | `AWS_ENDPOINT_URL` | `http://localhost:4566` | NOT SET | LocalStack endpoint |
 | `AWS_REGION` | `us-east-1` | `us-east-1` | AWS region |
 | `AWS_ACCESS_KEY_ID` | `test` | From IRSA/CDK | AWS credentials |
@@ -107,26 +188,23 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 ### DynamoDB Tables
 
 | Variable | LocalStack (Dev) | Production (AWS) | Description |
-|----------|-----------------|------------------|-------------|
+|----------|------------------|------------------|-------------|
 | `DYNAMODB_TABLE_JOBS` | `jobs` | `harrison-jobs` | Jobs table name |
 | `DYNAMODB_TABLE_IDEMPOTENCY` | `idempotency_keys` | `harrison-idempotency` | Idempotency table |
 
 ### SQS Queues
 
 | Variable | LocalStack (Dev) | Production (AWS) | Description |
-|----------|-----------------|------------------|-------------|
+|----------|------------------|------------------|-------------|
 | `SQS_QUEUE_URL` | `http://localhost:4566/.../harrison-jobs-queue` | Full SQS URL | Main queue URL |
 | `SQS_DLQ_URL` | `http://localhost:4566/.../harrison-jobs-dlq` | Full SQS URL | DLQ URL |
 | `SQS_PRIORITY_QUEUE_URL` | `http://localhost:4566/.../harrison-jobs-priority` | Full SQS URL | Priority queue URL |
-| `SQS_QUEUE_NAME` | `harrison-jobs-queue` | `harrison-jobs-queue` | Queue name |
-| `SQS_DLQ_NAME` | `harrison-jobs-dlq` | `harrison-jobs-dlq` | DLQ name |
-| `SQS_PRIORITY_QUEUE_NAME` | `harrison-jobs-priority` | `harrison-jobs-priority` | Priority queue name |
 
 ### JWT Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JWT_SECRET_KEY` | `super-secret-key...` | JWT signing key (use Secrets Manager in prod) |
+| `JWT_SECRET_KEY` | `super-secret-key...` | JWT signing key |
 | `JWT_ALGORITHM` | `HS256` | Algorithm |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Token expiration |
 
@@ -137,7 +215,6 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 | `DEBUG` | `false` | Debug mode |
 | `API_BASE_URL` | `http://localhost:8000` | For worker notifications |
 | `CLOUDWATCH_LOG_GROUP` | `/reto-prosperas/jobs` | CloudWatch log group |
-| `CLOUDWATCH_STREAM_NAME` | `worker` | CloudWatch stream name |
 
 ### Worker Settings
 
@@ -152,14 +229,10 @@ settings.is_production # True if AWS_ENDPOINT_URL is NOT set
 | `MIN_PROCESSING_TIME` | `5.0` | Min job processing time (s) |
 | `MAX_PROCESSING_TIME` | `30.0` | Max job processing time (s) |
 | `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Circuit breaker threshold |
-| `CIRCUIT_BREAKER_RECOVERY_TIMEOUT` | `300` | Circuit breaker recovery (s) |
 | `BACKOFF_BASE_DELAY` | `1.0` | Backoff base delay (s) |
-| `BACKOFF_MAX_DELAY` | `60.0` | Backoff max delay (s) |
 | `LOG_LEVEL` | `INFO` | Log level |
 
 ## AWS Production Resource Names
-
-CDK creates these resources in AWS:
 
 | Resource | Name |
 |----------|------|
@@ -172,35 +245,41 @@ CDK creates these resources in AWS:
 ## Commands
 
 ```bash
-# Initialize DynamoDB tables and SQS queues
-# LocalStack: Creates resources
+# Initialize DynamoDB tables and SQS queues (creates locally, verifies in prod)
 python init_db.py
 
-# AWS Production: Verifies resources exist (CDK should have provisioned them)
-python init_db.py
+# Run API locally (requires Docker for LocalStack)
+cd backend
+PYTHONPATH=.. uvicorn src.adapters.primary.fastapi.main:app --reload
+
+# Run worker locally (requires LocalStack running)
+cd backend
+PYTHONPATH=.. python -m worker.main
 
 # Run tests
 pytest tests/ -v --cov=src
+pytest worker/tests/ -v
 
-# Run locally (requires Docker for LocalStack)
-cd backend && PYTHONPATH=.. uvicorn src.adapters.primary.fastapi.main:app --reload
-
-# Run worker locally
-cd backend && PYTHONPATH=.. python -m worker.main
+# Docker compose (from project root)
+docker compose up localstack -d
+docker compose up api
+docker compose up worker
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| src/config/settings.py | API settings with LocalStack/AWS detection |
-| worker/config.py | Worker settings with LocalStack/AWS detection |
-| init_db.py | Database initialization (creates or verifies) |
-| src/adapters/primary/fastapi/main.py | FastAPI app entry point |
-| src/adapters/primary/fastapi/routes/jobs.py | /jobs endpoints |
-| src/adapters/primary/fastapi/routes/ws_routes.py | WebSocket endpoint |
+| src/adapters/primary/fastapi/main.py | FastAPI app entry point, routers, exception handlers |
+| src/adapters/primary/fastapi/routes/jobs.py | /jobs endpoints (create, list, get) |
+| src/adapters/primary/fastapi/routes/ws_routes.py | WebSocket endpoint /ws/jobs |
+| src/adapters/primary/fastapi/routes/notify.py | /internal/notify endpoint |
 | src/adapters/secondary/dynamodb/job_repository.py | DynamoDB implementation |
-| src/adapters/secondary/sqs/job_queue.py | SQS implementation + priority |
+| src/adapters/secondary/sqs/job_queue.py | SQS implementation |
+| src/domain/entities/job.py | Job entity |
+| src/domain/value_objects/job_status.py | JobStatus enum |
+| src/config/settings.py | API settings |
+| src/services/websocket_manager.py | WebSocket connection manager |
 | worker/main.py | Worker entry point |
 | worker/processor.py | Job processing logic |
 

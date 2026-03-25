@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # Production (AWS): {STACK_PREFIX}-jobs, {STACK_PREFIX}-idempotency
     # LocalStack (dev): jobs, idempotency_keys
     dynamodb_table_jobs: str = os.getenv("DYNAMODB_TABLE_JOBS", "jobs")
+    dynamodb_table_idempotency: str = os.getenv(
+        "DYNAMODB_TABLE_IDEMPOTENCY", "idempotency_keys"
+    )
 
     # =====================================================================
     # SQS Queues (URLs provided by CDK for production)

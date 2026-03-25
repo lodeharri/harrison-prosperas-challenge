@@ -450,7 +450,17 @@ jobs:
           echo "### 🌐 Frontend URL (CloudFront)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          CLOUDFRONT_ID="${{ steps.get-cloudfront.outputs.distribution-id || '' }}"
+          # First try to get CloudFront ID from CloudFormation outputs
+          CLOUDFRONT_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-cdn-stack \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+          
+          # If CloudFormation output fails, fall back to step output
+          if [ -z "$CLOUDFRONT_ID" ] || [ "$CLOUDFRONT_ID" = "None" ]; then
+            CLOUDFRONT_ID="${{ steps.get-cloudfront.outputs.distribution-id || '' }}"
+          fi
+          
           if [ -n "$CLOUDFRONT_ID" ]; then
             FRONTEND_DOMAIN=$(aws cloudfront get-distribution --id "$CLOUDFRONT_ID" --query 'Distribution.DomainName' --output text 2>/dev/null || echo "")
             if [ -n "$FRONTEND_DOMAIN" ]; then
