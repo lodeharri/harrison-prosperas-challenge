@@ -1,157 +1,104 @@
 # AGENTS.md - Infrastructure Module
 
-**Module:** AWS CDK Infrastructure & DevOps  
-**Directory:** `/home/harri/development/projects/harrison-prosperas-challenge/infra`  
+**Project:** Reto Prosperas - Report Job Processing System  
+**Directory:** `infra/`  
 **Skill:** `cicd-aws-production`  
-**Status:** ✅ CDK v2 API FIXED - SYNTH SUCCESS - GITHUB ACTIONS READY - DEPLOY FROM SCRATCH READY
+**Status:** ✅ CDK v2 - SYNTH SUCCESS - GITHUB ACTIONS READY
 
 ---
 
-## Infrastructure Summary
+## Context
 
-### Docker Network Structure
-- **LocalStack**: Port 4566 (SQS, DynamoDB, S3 emulation)
-- **FastAPI API**: Port 8000 (REST API + WebSocket)
-- **Worker**: Background process (SQS consumer)
-- **Frontend**: Port 3000 (React SPA via Nginx)
+This is the **Infrastructure Module** of the Reto Prosperas project. The full project context is documented in the root `AGENTS.md`.
 
-### LocalStack Edge Ports
-| Service | Port | LocalStack Service |
-|---------|------|-------------------|
-| SQS | 4566 | `sqs` |
-| DynamoDB | 4566 | `dynamodb` |
-| S3 | 4566 | `s3` |
-| CloudWatch | 4566 | `logs` |
+### What is Reto Prosperas?
+A system that allows users to create report jobs, processes them asynchronously via AWS SQS workers, and receives real-time notifications via WebSocket when jobs complete.
 
-### Mocked AWS Services (LocalStack)
-| Service | Resource Name | Purpose |
-|---------|---------------|---------|
-| DynamoDB | `jobs` | Job persistence |
-| DynamoDB | `idempotency_keys` | Idempotency tracking |
-| SQS | `harrison-jobs-queue` | Main job queue |
-| SQS | `harrison-jobs-dlq` | Dead letter queue |
-| SQS | `harrison-jobs-priority` | Priority queue |
+### What is this module?
+Infrastructure as Code (IaC) using **AWS CDK v2** that provisions all AWS resources needed for the system.
 
-### AWS CLI Commands for Verification
+## Scope
 
-#### LocalStack Verification
-```bash
-# Check LocalStack health
-curl http://localhost:4566/_localstack/health
+| Component | Responsibility |
+|-----------|----------------|
+| **Data Stack** | DynamoDB tables (jobs, idempotency), SQS queues (main, DLQ, priority) |
+| **Compute Stack** | ECS Fargate services (API + Worker), ECR repository, IAM roles, Secrets Manager |
+| **API Stack** | API Gateway REST, rate limiting (100 req/sec, burst 200), API key |
+| **CDN Stack** | S3 bucket for frontend, CloudFront distribution, WebSocket proxy |
+| **CI/CD** | GitHub Actions workflow for automated deployment |
+| **NOT** | Does NOT build the Docker image or frontend (done in GitHub Actions) |
 
-# List SQS queues
-aws --endpoint-url=http://localhost:4566 sqs list-queues
+## Architecture Overview
 
-# List DynamoDB tables
-aws --endpoint-url=http://localhost:4566 dynamodb list-tables
-
-# Create test message
-aws --endpoint-url=http://localhost:4566 sqs send-message \
-  --queue-url http://localhost:4566/000000000000/harrison-jobs-queue \
-  --message-body '{"test": "message"}'
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AWS Account                                  │
+│                                                                  │
+│  harrison-data-stack                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                       │
+│  │ DynamoDB        │  │ SQS            │                       │
+│  │ - harrison-jobs │  │ - jobs-queue    │                       │
+│  │ - harrison-idem │  │ - jobs-dlq      │                       │
+│  └─────────────────┘  │ - jobs-priority │                       │
+│                       └─────────────────┘                       │
+│          ↓                                                         │
+│  harrison-compute-stack                                          │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ ECS Fargate                                                │    │
+│  │   ┌─────────────┐    ┌─────────────┐                     │    │
+│  │   │ API Service │    │ Worker      │                     │    │
+│  │   │ (FastAPI)   │    │ (Processor) │                     │    │
+│  │   └──────┬──────┘    └──────┬──────┘                     │    │
+│  │          ↓                   ↓                             │    │
+│  │   ┌──────────────────────────────────────────────┐       │    │
+│  │   │           Application Load Balancer           │       │    │
+│  │   └──────────────────────────────────────────────┘       │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│          ↓                                                         │
+│  harrison-api-stack                                               │
+│  ┌─────────────────┐  ┌─────────────────┐                        │
+│  │ API Gateway     │  │ Rate Limiting   │                        │
+│  │ - /jobs         │  │ - 100 req/sec   │                        │
+│  │ - /health       │  │ - Burst 200     │                        │
+│  │ - /auth/token   │  │ - API Key       │                        │
+│  └────────┬────────┘  └─────────────────┘                        │
+│           ↓                                                        │
+│  harrison-cdn-stack                                               │
+│  ┌─────────────────┐  ┌─────────────────┐                      │
+│  │ S3 (Frontend)    │  │ CloudFront      │                      │
+│  │ - Static assets │  │ - Global CDN    │                      │
+│  │ - OAI protected  │  │ - WS proxy      │                      │
+│  └─────────────────┘  └─────────────────┘                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-#### AWS Production Verification
-```bash
-# List CloudFormation stacks
-aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE
+## Stack Dependencies
 
-# Get stack outputs
-aws cloudformation describe-stacks \
-  --stack-name harrison-data-stack \
-  --query 'Stacks[0].Outputs'
-
-# Check DynamoDB tables
-aws dynamodb list-tables
-
-# Check SQS queues
-aws sqs list-queues
-
-# Check ECS Fargate services
-aws ecs list-services --cluster harrison-cluster
-
-# Check API Gateway
-aws apigateway get-rest-apis
+```
+harrison-data-stack
+    └── harrison-compute-stack (needs queue URLs, table names)
+            └── harrison-api-stack (needs ECS ALB endpoint)
+                    └── harrison-cdn-stack (needs API URL for frontend)
 ```
 
----
+## If You Need To...
 
-## GitHub Actions Workflow Fixes Applied
-
-### Issues Found and Fixed:
-
-1. **CDK Output Extraction**: Fixed extraction of `APIUrl` (was looking for `ApiEndpoint`)
-2. **WebSocket URL**: Fixed protocol from `https://` to `wss://` with correct path
-3. **URL Construction**: Fixed health check and smoke test URL logic
-4. **Missing Dependencies**: Created `package.json` and installed CDK dependencies
-5. **Job Output References**: Fixed references to non-existent `deploy-cdk.outputs`
-6. **Error Handling**: Added robust error handling and fallbacks
-
-### Updated Files:
-- `.github/workflows/deploy.yml`: Major fixes to CDK output extraction, URL construction, error handling
-- `infra/package.json`: Created with CDK dependencies
-- `infra/package-lock.json`: Generated by npm install
-
-### Required GitHub Secrets:
-| Secret | Purpose |
-|--------|---------|
-| `AWS_ACCESS_KEY_ID` | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_ACCOUNT_ID` | AWS account ID |
-| `JWT_SECRET_KEY` | JWT signing key |
-
-### Required GitHub Variables:
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `CDK_BOOTSTRAPPED` | Skip bootstrap if already done | `false` |
-| `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID | (post-deploy) |
-
----
-
-## CDK v2 API Compatibility Notes
-
-### CloudFront (cdn_stack.py)
-
-**Changes Applied:**
-- Replaced `CfnDistribution.SourceConfigProperty` with separate `origins` (list of `OriginProperty`) and `default_cache_behavior` (`DefaultCacheBehaviorProperty`)
-- Converted enum values to strings: `PriceClass.PRICE_CLASS_100.value`, `ViewerProtocolPolicy.REDIRECT_TO_HTTPS.value`
-- Updated `originAccessIdentityName` → `originAccessIdentityId` (deprecated attribute fix)
-- Changed `attr_function_arn` → `function_arn` for CloudFront Function
-
-### ECS Fargate (compute_stack.py)
-
-**Note:** Uses `ApplicationLoadBalancedFargateService` and `FargateService` high-level constructs which are fully compatible with CDK v2.
-
-### API Gateway (api_stack.py)
-
-**Note:** Uses high-level constructs (`apigateway.RestApi`, `UsagePlan`, `ApiKey`) which are fully compatible with CDK v2.
-
-### Environment Configuration (app.py)
-
-**Fix Applied:**
-- Added default account (`123456789012`) for `cdk synth` when `CDK_ACCOUNT` is not set
-
----
-
-## Quick Start
-
-### Prerequisites
-
-```bash
-# 1. Install CDK
-npm install -g aws-cdk
-
-# 2. Set AWS credentials
-export AWS_ACCESS_KEY_ID="your-key"
-export AWS_SECRET_ACCESS_KEY="your-secret"
-export AWS_DEFAULT_REGION="us-east-1"
-
-# 3. Bootstrap environment (one-time)
-cdk bootstrap aws://ACCOUNT/REGION
-
-# 4. Deploy all stacks
-cdk deploy --all
-```
+| Task | Go To |
+|------|-------|
+| Modify DynamoDB tables | `stacks/data_stack.py` |
+| Modify SQS queues | `stacks/data_stack.py` |
+| Modify ECS Fargate services | `stacks/compute_stack.py` |
+| Modify ECR repository | `stacks/compute_stack.py` |
+| Modify IAM roles | `stacks/compute_stack.py` |
+| Modify Secrets Manager | `stacks/compute_stack.py` |
+| Modify API Gateway | `stacks/api_stack.py` |
+| Modify rate limiting | `stacks/api_stack.py` |
+| Modify API key | `stacks/api_stack.py` |
+| Modify S3 bucket | `stacks/cdn_stack.py` |
+| Modify CloudFront | `stacks/cdn_stack.py` |
+| Modify deployment pipeline | `.github/workflows/deploy.yml` |
+| Modify stack orchestration | `app.py` |
+| Modify CDK configuration | `cdk.json` |
 
 ---
 
@@ -159,19 +106,18 @@ cdk deploy --all
 
 ```
 infra/
-├── app.py                      # CDK App entry point
+├── app.py                      # CDK App entry point, stack orchestration
 ├── requirements.txt           # aws-cdk-lib>=2.0.0, constructs
 ├── cdk.json                    # {"app": "python app.py"}
+├── package.json                # Node.js CDK dependencies
 ├── stacks/
 │   ├── __init__.py            # Stack exports
-│   ├── data_stack.py          # DynamoDB + SQS
-│   ├── compute_stack.py       # ECS Fargate (API + Worker)
+│   ├── data_stack.py          # DynamoDB + SQS resources
+│   ├── compute_stack.py       # ECS Fargate (API + Worker) + ECR + IAM
 │   ├── api_stack.py           # API Gateway + Rate Limiting
 │   └── cdn_stack.py           # S3 + CloudFront
 └── README.md                  # Full deployment guide
 ```
-
----
 
 ## AWS Resources Created
 
@@ -205,7 +151,7 @@ infra/
 | Resource | `/jobs/{job_id}` | GET | ECS ALB integration |
 | Resource | `/health` | GET | No auth |
 | Resource | `/auth` | POST | Token generation |
-| Usage Plan | `harrison-rate-limit` | 100 req/min | Burst 200 |
+| Usage Plan | `harrison-rate-limit` | 100 req/sec | Burst 200 |
 | API Key | `harrison-api-key` | Key | Auto-generated |
 
 ### 4. CDN Stack (`harrison-cdn-stack`)
@@ -216,8 +162,6 @@ infra/
 | CloudFront | `harrison-frontend-cdn` | Distribution | Global distribution |
 | OAI | Origin Access Identity | Security | S3 protection |
 | Function | `spa-routing` | CloudFront | SPA routing |
-
----
 
 ## Environment Variables for ECS Fargate
 
@@ -242,95 +186,7 @@ environment={
 
 ### Worker Service
 
-Same as API + `SQS_DLQ_URL` for sending failed messages.
-
----
-
-## Deployment Commands
-
-```bash
-# Set environment
-export CDK_ACCOUNT="123456789012"
-export CDK_REGION="us-east-1"
-
-# Bootstrap (one-time)
-cdk bootstrap aws://$CDK_ACCOUNT/$CDK_REGION
-
-# Deploy all stacks
-cdk deploy --all
-
-# Deploy specific stack
-cdk deploy harrison-data-stack
-
-# Synthesize (dry run)
-cdk synth
-
-# Show diff
-cdk diff
-
-# List stacks
-cdk list
-```
-
----
-
-## Post-Deployment Steps
-
-### 1. Build and Push Docker Images
-
-```bash
-# Get ECR URI
-REPO_URI=$(aws cloudformation describe-stacks \
-    --stack-name harrison-compute-stack \
-    --query 'Stacks[0].Outputs[?OutputKey==`ECRRepositoryUri`].OutputValue' \
-    --output text)
-
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | \
-    docker login --username AWS --password-stdin $REPO_URI
-
-# Build and push
-docker build -t api:latest ../backend
-docker tag api:latest $REPO_URI:latest
-docker push $REPO_URI:latest
-```
-
-### 2. Deploy Frontend
-
-```bash
-# Set build vars
-export VITE_API_URL="https://<api-id>.execute-api.us-east-1.amazonaws.com/prod"
-export VITE_WS_URL="wss://<api-id>.execute-api.us-east-1.amazonaws.com/prod/ws"
-
-# Build and deploy
-cd ../frontend && npm run build
-aws s3 sync dist/ s3://harrison-frontend --delete
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
-```
-
----
-
-## CDK Context Options
-
-```json
-{
-  "stackPrefix": "harrison",
-  "environment": "production",
-  "removalPolicy": "retain",
-  "jwtSecretName": "harrison-jwt-secret"
-}
-```
-
----
-
-## Stack Dependencies
-
-```
-harrison-data-stack
-    └── harrison-compute-stack (needs queue URLs, table names)
-            └── harrison-api-stack (needs ECS ALB endpoint)
-                    └── harrison-cdn-stack (needs API URL for frontend)
-```
+Same as API + `API_BASE_URL` for notifying API of status changes.
 
 ---
 
@@ -366,104 +222,93 @@ harrison-data-stack
 
 ---
 
-## Environment Detection
+## GitHub Actions Secrets & Variables
 
-The application uses `AWS_ENDPOINT_URL` to detect environment:
+### Required Secrets
+| Secret | Purpose |
+|--------|---------|
+| `AWS_ACCESS_KEY_ID` | AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
+| `AWS_ACCOUNT_ID` | AWS account ID |
+| `JWT_SECRET_KEY` | JWT signing key |
 
-| Environment | `AWS_ENDPOINT_URL` | Behavior |
-|-------------|-------------------|----------|
-| LocalStack | `http://localhost:4566` | Creates resources locally |
-| AWS Production | NOT SET | Uses real AWS services |
+### Required Variables
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `CDK_BOOTSTRAPPED` | Skip bootstrap if already done | `false` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID | (post-deploy) |
 
-### Local Development Commands
+---
+
+## Quick Start
+
 ```bash
-# Start all services
-docker-compose up -d
+# Install CDK
+npm install -g aws-cdk
 
-# Initialize LocalStack resources
-python backend/init_db.py
+# Set AWS credentials
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+export AWS_DEFAULT_REGION="us-east-1"
 
-# Run API
-cd backend && uvicorn src.adapters.primary.fastapi.main:app --reload
-
-# Run worker
-cd backend && python -m worker.main
-
-# Stop services
-docker-compose down
-```
-
-### Production Deployment Commands
-```bash
-# Bootstrap CDK (first time)
+# Bootstrap (one-time)
 cdk bootstrap aws://ACCOUNT/REGION
 
 # Deploy all stacks
 cdk deploy --all
+```
 
-# Deploy specific stack
+## CDK Commands
+
+```bash
+# List stacks
+cdk list
+
+# Deploy all
+cdk deploy --all
+
+# Deploy specific
 cdk deploy harrison-data-stack
 
-# Synthesize templates
+# Synthesize (dry run)
 cdk synth
 
-# Destroy all resources
+# Show diff
+cdk diff
+
+# Destroy all
 cdk destroy --all
 ```
 
----
-
-## AWS CLI Verification Commands
+## AWS CLI Verification
 
 ```bash
 # List stacks
 aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE
 
-# Describe stack outputs
+# Get stack outputs
 aws cloudformation describe-stacks \
-    --stack-name harrison-data-stack \
-    --query 'Stacks[0].Outputs'
+  --stack-name harrison-data-stack \
+  --query 'Stacks[0].Outputs'
 
-# List DynamoDB tables
+# Check DynamoDB
 aws dynamodb list-tables
 
-# List SQS queues
+# Check SQS
 aws sqs list-queues
 
-# Describe API Gateway
+# Check ECS
+aws ecs list-services --cluster harrison-cluster
+
+# Check API Gateway
 aws apigateway get-rest-apis
-
-# Describe CloudFront
-aws cloudfront list-distributions
 ```
 
----
+## Local Development
 
----
-
-## Cleanup
-
-```bash
-cdk destroy --all
-```
-
-**Warning**: This deletes all data!
-
----
-
-## Files Created
-
-| File | Purpose |
-|------|---------|
-| `app.py` | CDK entry point, stack orchestration |
-| `requirements.txt` | CDK dependencies |
-| `cdk.json` | CDK configuration |
-| `stacks/__init__.py` | Stack exports |
-| `stacks/data_stack.py` | DynamoDB + SQS resources |
-| `stacks/compute_stack.py` | ECS Fargate + ECR + IAM |
-| `stacks/api_stack.py` | API Gateway + Rate limiting |
-| `stacks/cdn_stack.py` | S3 + CloudFront |
-| `README.md` | Deployment guide |
+For local development with LocalStack, see root `AGENTS.md`:
+- `docker compose up` starts LocalStack + API + Worker + Frontend
+- Backend uses `AWS_ENDPOINT_URL=http://localhost:4566` for local resources
 
 ---
 
@@ -480,51 +325,29 @@ After deployment, verify:
 - [ ] CloudFront distribution active: `aws cloudfront list-distributions`
 - [ ] Secrets Manager secret exists: `aws secretsmanager list-secrets`
 
----
+## Cleanup
 
-## Deploy from Scratch Verification
-
-### Verification Results (8/8 checks passed)
-✅ **Python 3.10.12** - Compatible with CDK v2  
-✅ **Imports funcionan** - Todos los módulos se importan correctamente  
-✅ **cdk.json válido** - Configuración correcta (stackPrefix: harrison)  
-✅ **requirements.txt válido** - Dependencias Python correctas  
-✅ **package.json válido** - Dependencias Node.js correctas  
-✅ **Archivos de stacks** - 4 stacks encontrados (Data, Compute, API, CDN)  
-✅ **Variables de entorno** - Sin valores hardcodeados problemáticos  
-✅ **Dependencias entre stacks** - Referencias correctas entre stacks
-
-### CDK Synthesis Test
 ```bash
-cd infra
-npx cdk list
-# Output: harrison-data-stack, harrison-compute-stack, harrison-api-stack, harrison-cdn-stack
-
-npx cdk synth harrison-data-stack
-# Output: CloudFormation template válido
+cdk destroy --all
 ```
 
-### GitHub Actions Ready
-El workflow `deploy.yml` incluye:
-- ✅ Bootstrap condicional (verifica `CDK_BOOTSTRAPPED` variable)
-- ✅ Extracción robusta de outputs CDK
-- ✅ Manejo de errores con fallbacks
-- ✅ Health checks y smoke tests
-- ✅ Actualización automática de `CLOUDFRONT_DISTRIBUTION_ID`
+**Warning:** This deletes all data!
 
-### Next Steps
-1. **Configurar GitHub Secrets:**
-   - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_ID`, `JWT_SECRET_KEY`
+---
 
-2. **Configurar GitHub Variables:**
-   - `CDK_BOOTSTRAPPED=false` (se actualizará a `true` después del primer despliegue)
-   - Variables opcionales: `AWS_REGION`, `STACK_PREFIX`, etc.
+## CDK v2 Compatibility Notes
 
-3. **Trigger deployment:**
-   ```bash
-   git push origin master
-   # O merge PR a master
-   ```
+### CloudFront (cdn_stack.py)
+- Uses `OriginProperty`, `DefaultCacheBehaviorProperty` (not `CfnDistribution.SourceConfigProperty`)
+- Enum values as strings: `PriceClass.PRICE_CLASS_100.value`, `ViewerProtocolPolicy.REDIRECT_TO_HTTPS.value`
+
+### ECS Fargate (compute_stack.py)
+- Uses `ApplicationLoadbalancedFargateService`, `FargateService` - fully compatible with CDK v2
+
+### API Gateway (api_stack.py)
+- Uses high-level constructs: `apigateway.RestApi`, `UsagePlan`, `ApiKey` - fully compatible with CDK v2
+
+---
 
 ## References
 

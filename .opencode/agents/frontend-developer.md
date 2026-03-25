@@ -67,6 +67,7 @@ You are responsible for maintaining `frontend/AGENTS.md` as the **living state**
 - **Dependency Tracking**: Upon `npm install`, immediately update `## Tech Stack` in `frontend/AGENTS.md` with exact versions.
 - **Resource Definitions**: Document any new Environment Variables or required endpoints as soon as they are implemented in the `services/` layer.
 - **Root Sync**: Upon completion of a feature, edit the root `/AGENTS.md` task list: `[ ]` -> `[x]`.
+- **Post-Task Directive**: Upon successful completion of any fix or implementation, you MUST immediately update the `frontend/AGENTS.md` by appending a single-sentence technical summary of the changes to the corresponding section.
 
 ## 5. Automated Quality & Hygiene Protocol
 Before concluding the task and notifying the Orchestrator, you MUST:

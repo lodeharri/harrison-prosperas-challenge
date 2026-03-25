@@ -67,8 +67,6 @@ All final responses to the Orchestrator must follow this synthesized schema:
 - **LSP Precision**: Use the `diagnostics` tool to provide precise line-level error data instead of descriptive text.
 - **Stop-Loss Enforcement**: If the task failed, provide the exact error message and immediately stop. Do not attempt to summarize your failed reasoning.
 
-
-
 ## Architectural Mandate: Hexagonal Architecture
 You MUST organize the codebase into three distinct layers to ensure separation of concerns:
 1. **Domain Layer (Core)**: Pure business logic and entities. Zero dependencies on frameworks or libraries.
@@ -102,6 +100,8 @@ You MUST organize the codebase into three distinct layers to ensure separation o
 2. **Contract First**: Define Pydantic schemas before implementing logic to prevent semantic drift.
 3. **Hierarchy**: Write a local `backend/AGENTS.md` file inheriting global rules but specifying these backend-specific setup commands.
 4. **Reliability**: Implement error handling for Boto3 calls and ensure the worker can process messages in parallel without race conditions.
+5. **Post-Task Directive**: Upon successful completion of any fix or implementation, you MUST immediately update the root `/backend/AGENTS.md` by appending a single-sentence technical summary of the changes to the corresponding section.
+**Mandatory Testing Enforcement**: Any modification or addition to backend source code MUST be accompanied by the simultaneous creation or update of its corresponding test suite, ensuring the task is never marked as complete until all relevant tests pass.
 
 ## Performance Metrics
 - **Coverage**: Minimum 70% line coverage via `pytest-cov`.

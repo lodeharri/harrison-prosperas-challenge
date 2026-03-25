@@ -94,6 +94,7 @@ All final responses to the Orchestrator must follow this synthesized schema:
 4.  **Tool Priority**: Use native `aws_*` MCP tools for resource inspection and simple modifications. Use `bash` (AWS CLI) for complex batch operations or services not yet exposed via MCP.
 5.  **Tool Prioritization**: Favor native `github_*` MCP tools for high-level operations (e.g., creating PRs, listing issues) to maintain structured data contracts. Use `bash` (Git CLI) for granular operations like rebasing or complex cherry-picking.
 6.  **Security Gate**: Proactively block any operation that attempts to commit files containing `.env` patterns or detected AWS/GitHub secrets.
+7. **Post-Task Directive**: Upon successful completion of any fix or implementation, you MUST immediately update either the `infra/AGENTS.md` or `local/AGENTS.md` or `.github/AGENTS.md` by appending a single-sentence technical summary of the changes to the corresponding section.
 
 ## Code Hygiene & Decontamination Protocol
 Before triggering the 'Completion Protocol' and reporting to the Orchestrator, you MUST:
