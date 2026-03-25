@@ -138,7 +138,7 @@ infra/
 | ECR Repository | `harrison-prospera-challenge` | Docker images | Scan on push |
 | Secrets Manager | `harrison-jwt-secret` | 64-char key | Auto-generated |
 | IAM Role | `APIServiceRole` | ECS Fargate | DynamoDB + SQS + Secrets |
-| IAM Role | `WorkerServiceRole` | ECS Fargate | DynamoDB + SQS |
+| IAM Role | `WorkerServiceRole` | ECS Fargate | DynamoDB (jobs + idempotency) + SQS (receive/delete/change visibility) |
 | ECS Fargate | `harrison-api` | ALB Service | 0.5 vCPU, 1 GB, port 8000 |
 | ECS Fargate | `harrison-worker` | Service | 0.25 vCPU, 0.5 GB |
 
@@ -368,3 +368,12 @@ cdk destroy --all
 - CDK Documentation: https://docs.aws.amazon.com/cdk/
 - ECS Fargate: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/getting-started-fargate.html
 - CDK Best Practices: https://docs.aws.amazon.com/cdk/latest/guide/best-practices.html
+
+---
+
+## Recent Changes
+
+### 2026-03-25: Worker IAM Role Permissions Update
+- Added `self.data_stack.idempotency_table.table_arn` to DynamoDB resources in `_create_worker_role()` function
+- Added `sqs:ChangeMessageVisibility` action to SQS permissions for worker role
+- Worker now has full access to idempotency table and can change message visibility for long-running jobs

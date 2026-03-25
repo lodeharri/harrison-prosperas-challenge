@@ -280,6 +280,7 @@ class ComputeStack(Stack):
                 resources=[
                     self.data_stack.jobs_table.table_arn,
                     f"{self.data_stack.jobs_table.table_arn}/index/*",
+                    self.data_stack.idempotency_table.table_arn,
                 ],
             )
         )
@@ -293,6 +294,7 @@ class ComputeStack(Stack):
                     "sqs:DeleteMessage",
                     "sqs:GetQueueUrl",
                     "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility",
                 ],
                 resources=[
                     self.data_stack.job_queue_arn,
@@ -513,7 +515,7 @@ class ComputeStack(Stack):
                 "SQS_PRIORITY_QUEUE_NAME": self.data_stack.priority_queue_name,
                 "LOG_LEVEL": "INFO",
                 # Worker calls API's /internal/notify endpoint for WebSocket notifications
-                "API_BASE_URL": f"http://{self.api_service.load_balancer.load_balancer_dns_name}:8000",
+                "API_BASE_URL": f"http://{self.api_service.load_balancer.load_balancer_dns_name}",
             },
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix=f"{self.stack_prefix}/worker"

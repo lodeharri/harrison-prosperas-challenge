@@ -66,7 +66,7 @@ Frontend → wss://<cloudfront>.cloudfront.net/ws/jobs?user_id={id}&token={jwt}
 ### Notification Flow
 ```
 1. Worker updates job status in DynamoDB
-2. Worker POSTs to http://<ALB>:8000/internal/notify
+2. Worker POSTs to http://<ALB>/internal/notify
 3. FastAPI WebSocketManager broadcasts to connected clients
 4. Frontend receives: {"type": "job_update", "data": {...}}
 ```
@@ -74,7 +74,7 @@ Frontend → wss://<cloudfront>.cloudfront.net/ws/jobs?user_id={id}&token={jwt}
 ```python
 # infra/stacks/compute_stack.py - Worker environment
 environment={
-    "API_BASE_URL": f"http://{self.api_service.load_balancer.load_balancer_dns_name}:8000",
+    "API_BASE_URL": f"http://{self.api_service.load_balancer.load_balancer_dns_name}",
     # ... other vars
 }
 ```
@@ -180,6 +180,9 @@ curl $(aws cloudformation describe-stacks --stack-name harrison-api-stack \
 | AWS Production | ✅ Implemented |
 ---
 ## PREVIOUS CHANGES
+### 2026-03-25: Worker API_BASE_URL fix
+- Removed port 8000 from `API_BASE_URL` in `infra/stacks/compute_stack.py`
+- Worker now calls ALB on port 80 (HTTP), ALB forwards to container port 8000
 ### 2026-03-22: WebSocket via ALB
 - Added `API_BASE_URL` to Worker environment in `infra/stacks/compute_stack.py`
 - Updated `.github/workflows/deploy.yml` to use ALB URL for `VITE_WS_URL`
